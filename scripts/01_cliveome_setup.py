@@ -6,10 +6,11 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pod5
 
+from src.signal_loader.config import RAW_DATA_DIR, PROCESSED_DATA_DIR
+
 
 def main():
-    # todo: create a config utility, that would do relative paths based on project root
-    cliveome_path = "../data/raw/cliveome.pod5"
+    cliveome_path = RAW_DATA_DIR / "cliveome.pod5"
 
     data = {}
 
@@ -27,14 +28,14 @@ def main():
     categories = data.keys()
 
     for category in categories:
-        output_path = f"../data/processed/cliveome_category_{category}.parquet"
+        output_path = PROCESSED_DATA_DIR / f"cliveome_category_{category}.parquet"
         table = pa.Table.from_pandas(data[category])
         pq.write_table(table, output_path)
         print(f"Wrote category {category} to {output_path}")
 
 
 def test_parquet():
-    read_table = pq.read_table('../data/processed/cliveome_category_13.parquet')
+    read_table = pq.read_table(PROCESSED_DATA_DIR / "cliveome_category_13.parquet")
     read_df = read_table.to_pandas()
 
     first_entry = read_df.iloc[0]
@@ -49,3 +50,4 @@ if __name__ == '__main__':
     # todo: verify if cliveome present, if not download (maybe ask for permission)
     main()
     test_parquet()
+    # todo: verify the end state of the parquet files (13-22 exist and have expected number of entries)

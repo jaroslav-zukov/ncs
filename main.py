@@ -1,9 +1,15 @@
+from src.signal_loader.loader import load_signal
+
 def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press ⌘F8 to toggle the breakpoint.
+    print(f'Hi, {name}')
 
-
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     print_hi('PyCharm')
 
+    # Load a signal with 1000 data points
+    signal_size = 1000
+    signal = load_signal(signal_size)
+
+    print(f"Signal shape: {signal.shape}")
+    print(f"Signal type: {type(signal)}")
+    print(f"First 10 values: {signal[:10]}")
