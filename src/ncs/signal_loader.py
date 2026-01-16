@@ -1,6 +1,6 @@
 import pyarrow.parquet as pq
 
-from src.signal_loader.config import PROCESSED_DATA_DIR
+from src.ncs.config import PROCESSED_DATA_DIR
 
 supported_sources = ['cliveome']
 
@@ -11,6 +11,7 @@ def load_signal(power, count, source='cliveome'):
     signals = []
 
     if source == 'cliveome':
+        # todo: verify cliveome parquet file exists -> else advice to run cliveome setup script
         read_table = pq.read_table(PROCESSED_DATA_DIR / f"cliveome_category_{power}.parquet")
         read_df = read_table.to_pandas()
         signals = read_df.head(count)['signal']

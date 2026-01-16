@@ -1,4 +1,4 @@
-from src.signal_loader.loader import load_signal
+from ncs import load_signal
 
 def print_hi(name):
     print(f'Hi, {name}')
