@@ -6,7 +6,6 @@ def print_hi(name):
 if __name__ == '__main__':
     print_hi('PyCharm')
 
-    # Load a signal with 1000 data points
     signal = load_signal(13, 2)[0]
 
     print(f"Signal shape: {signal.shape}")
