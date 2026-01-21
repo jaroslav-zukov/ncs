@@ -6,4 +6,5 @@ requires-python = ">=3.12"
 dependencies = [
     "pandas>=2.3.3",
     "pod5>=0.3.35",
+    "pywavelets>=1.9.0",
 ]
