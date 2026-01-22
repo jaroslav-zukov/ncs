@@ -1,0 +1,19 @@
+import numpy as np
+
+from src.ncs.exact_tree_projection import tree_projection
+from src.ncs.wavelet_module import forward_transform, inverse_transform
+from src.ncs.wt_coeffs import WtCoeffs
+
+
+def generate_tree_sparse_signals(power, count, tree_sparsity, wavelet):
+    n = 2**power
+
+    np.random.seed(420)
+    random_signals = [np.random.randint(low=-300, high=300, size=n) for _ in range(count)]
+
+    random_wt_coeffs: list[WtCoeffs] = [forward_transform(signal, wavelet) for signal in random_signals]
+    tree_sparse_coeffs: list[WtCoeffs] = [tree_projection(wt_coeffs, tree_sparsity) for wt_coeffs in random_wt_coeffs]
+    tree_sparse_signals: list[np.ndarray] = [inverse_transform(wt_coeffs) for wt_coeffs in tree_sparse_coeffs]
+
+    return tree_sparse_signals
+

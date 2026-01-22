@@ -15,7 +15,7 @@ class MathArray:
         return len(self.data)
 
 
-def tree_projection(wt_coeffs, k):
+def tree_projection(wt_coeffs: WtCoeffs, k: int) -> WtCoeffs:
     root_count = wt_coeffs.root_count
 
     if root_count != 1:
@@ -24,7 +24,7 @@ def tree_projection(wt_coeffs, k):
         )
 
     d = 2
-    y = MathArray(wt_coeffs.get_flat_coeffs())
+    y = MathArray(wt_coeffs.flat_coeffs)
     n = len(y)
     max_level = wt_coeffs.max_level
 
@@ -116,5 +116,8 @@ def tree_projection(wt_coeffs, k):
         y_hat[i] = y[i] * tau[i]
 
     return WtCoeffs.from_flat_coeffs(
-        flat_coeffs=y_hat.data, root_count=root_count, max_level=max_level
+        flat_coeffs=y_hat.data,
+        root_count=root_count,
+        max_level=max_level,
+        wavelet=wt_coeffs.wavelet,
     )

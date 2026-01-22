@@ -2,7 +2,7 @@ import numpy as np
 
 
 class WtCoeffs:
-    def __init__(self, coeff_groups):
+    def __init__(self, coeff_groups, wavelet):
         if not coeff_groups:
             raise ValueError("coeff_groups cannot be empty")
 
@@ -10,6 +10,7 @@ class WtCoeffs:
             raise TypeError("coeff_groups must be a list")
 
         self.coeff_groups = coeff_groups
+        self.wavelet = wavelet
         self.max_level = len(coeff_groups) - 1
         self.root_count = len(coeff_groups[0])
 
@@ -23,14 +24,8 @@ class WtCoeffs:
                 "Try setting pywt.wavedec mode='periodization'"
             )
 
-    def get_flat_coeffs(self):
-        coeffs = []
-        for level in self.coeff_groups:
-            coeffs.extend(level)
-        return coeffs
-
     @classmethod
-    def from_flat_coeffs(cls, flat_coeffs, root_count, max_level):
+    def from_flat_coeffs(cls, flat_coeffs, root_count, max_level, wavelet):
         if len(flat_coeffs) != root_count * (2**max_level):
             raise ValueError(
                 f"Invalid flat_coeffs length: expected {root_count * (2**max_level)}, got {len(flat_coeffs)}"
@@ -41,10 +36,10 @@ class WtCoeffs:
 
         for level in range(max_level + 1):
             level_size = root_count * (2 ** (level - 1)) if level > 0 else root_count
-            coeff_groups.append(flat_coeffs[idx : idx + level_size])
+            coeff_groups.append(np.array(flat_coeffs[idx : idx + level_size]))
             idx += level_size
 
-        return cls(coeff_groups)
+        return cls(coeff_groups, wavelet)
 
     def __eq__(self, other):
         if not isinstance(other, WtCoeffs):
@@ -57,3 +52,15 @@ class WtCoeffs:
                 return False
 
         return True
+
+    @property
+    def flat_coeffs(self):
+        return np.concatenate(self.coeff_groups)
+
+    # @property
+    # def cA(self):
+    #     return self.coeff_groups[0]
+    #
+    # @property
+    # def cD(self):
+    #     return self.coeff_groups[1:]
