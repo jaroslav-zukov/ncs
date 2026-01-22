@@ -53,12 +53,6 @@ def main():
     def subtree_size(level):
         return min(int((d ** (max_level + 1 - level) - 1) / (d - 1)), k - level)
 
-    # todo implement serious version after
-    # subtree_size = {
-    #     2: 1,
-    #     1: 3
-    # }
-
     f = {}
     g = {}
 
@@ -66,7 +60,7 @@ def main():
     g_temp = {}
 
     # leaves iterator
-    for i in range(d ** (max_level - 1) + 1, d ** max_level + 1):
+    for i in range(d ** (max_level - 1) + 1, d**max_level + 1):
         f[(i, 0)] = 0
         f[(i, 1)] = y[i] ** 2
 
@@ -81,8 +75,8 @@ def main():
 
     for j in range(max_level - 1, 0, -1):  # j just like in paper
         print(f"j: {j} (processing tree level {j})")
-        print(f"\tIterating i through {range(d ** (j - 1) + 1, (d ** j) + 1)}")
-        for i in range(d ** (j - 1) + 1, (d ** j) + 1):  # i just like in paper
+        print(f"\tIterating i through {range(d ** (j - 1) + 1, (d**j) + 1)}")
+        for i in range(d ** (j - 1) + 1, (d**j) + 1):  # i just like in paper
             print(f"{'\t' * 2}i: {i} (processing node {i})")
             f[(i, 0)] = 0
             f[(i, 1)] = y[i] ** 2
@@ -93,8 +87,11 @@ def main():
             for r in range(1, d + 1):  # r just like in paper
                 print(f"{'\t' * 4}r: {r} (processing child {r} of node {i})")
                 print(
-                    f"{'\t' * 5}Iterating l through {range(2, min(subtree_size(j), r * subtree_size(j + 1) + 1) + 1)}")
-                for l in range(2, min(subtree_size(j), r * subtree_size(j + 1) + 1) + 1):
+                    f"{'\t' * 5}Iterating l through {range(2, min(subtree_size(j), r * subtree_size(j + 1) + 1) + 1)}"
+                )
+                for l in range(
+                    2, min(subtree_size(j), r * subtree_size(j + 1) + 1) + 1
+                ):
                     print(f"{'\t' * 6}l: {l} (calculating budget {l})")
                     s_minus = max(0, l - ((r - 1) * subtree_size(j + 1) + 1))
                     print(f"{'\t' * 7}Calculated s_minus: {s_minus}")
@@ -103,7 +100,7 @@ def main():
 
                     s_hat = max(
                         range(s_minus, s_plus + 1),
-                        key=lambda s: f[(d * (i - 1) + r, s)] + f[(i, l - s)]
+                        key=lambda s: f[(d * (i - 1) + r, s)] + f[(i, l - s)],
                     )
                     print(f"{'\t' * 7}Calculated s_hat: {s_hat}")
 
@@ -114,17 +111,20 @@ def main():
                     g_temp[(i, l)][r - 1] = s_hat
 
                 print(
-                    f"{'\t' * 5}Iterating l through {range(2, min(subtree_size(j), r * subtree_size(j + 1) + 1) + 1)}")
-                for l in range(2, min(subtree_size(j), r * subtree_size(j + 1) + 1) + 1):
+                    f"{'\t' * 5}Iterating l through {range(2, min(subtree_size(j), r * subtree_size(j + 1) + 1) + 1)}"
+                )
+                for l in range(
+                    2, min(subtree_size(j), r * subtree_size(j + 1) + 1) + 1
+                ):
                     print(f"{'\t' * 6}Updating f[({i}, {l})] = {f_temp[(i, l)]}")
                     f[(i, l)] = f_temp[(i, l)]
                     print(f"{'\t' * 6}Updating g[({i}, {l})] = {g_temp[(i, l)]}")
                     g[(i, l)] = g_temp[(i, l)]
 
-    print('-' * 40)
+    print("-" * 40)
     print_table("f", f)
     print_table("g", g)
-    print('-' * 40)
+    print("-" * 40)
 
     f[(1, 0)] = 0
     f[(1, 1)] = y[1] ** 2
@@ -135,7 +135,9 @@ def main():
     for r in range(2, d + 1):
         print(f"{'\t' * 1}r: {r}")
 
-        print(f"{'\t' * 2}Iterating l through {range(2, min(k, (r - 1) * subtree_size(1) + 1) + 1)}")
+        print(
+            f"{'\t' * 2}Iterating l through {range(2, min(k, (r - 1) * subtree_size(1) + 1) + 1)}"
+        )
         for l in range(2, min(k, (r - 1) * subtree_size(1) + 1) + 1):
             print(f"{'\t' * 3}l: {l}")
             s_minus = max(1, l - ((r - 2) * subtree_size(1) + 1))
@@ -143,8 +145,7 @@ def main():
             s_plus = min(l - 1, subtree_size(1))
             print(f"{'\t' * 4}Calculated s_plus: {s_plus}")
             s_hat = max(
-                range(s_minus, s_plus + 1),
-                key=lambda s: f[(r, s)] + f[(1, l - s)]
+                range(s_minus, s_plus + 1), key=lambda s: f[(r, s)] + f[(1, l - s)]
             )
             print(f"{'\t' * 4}Calculated s_hat: {s_hat}")
 
@@ -157,10 +158,10 @@ def main():
             f[(1, l)] = f_temp[(1, l)]
             g[(1, l)] = g_temp[(1, l)]
 
-    print('-' * 40)
+    print("-" * 40)
     print_table("f", f)
     print_table("g", g)
-    print('-' * 40)
+    print("-" * 40)
 
     print("Backtracking the solution")
 
@@ -174,8 +175,8 @@ def main():
 
         start_node = 1 if j == 0 else d ** (j - 1) + 1
 
-        print(f"Iterating i in {range(start_node, d ** j + 1)}")
-        for i in range(start_node, d ** j + 1):
+        print(f"Iterating i in {range(start_node, d**j + 1)}")
+        for i in range(start_node, d**j + 1):
             if tau[i] == 1:
                 for r in range(max(1, 2 - j), d + 1):
                     if g[(i, gamma[i])][r - 1] > 0:

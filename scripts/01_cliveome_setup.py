@@ -22,8 +22,15 @@ def main():
             if signal_category not in data:
                 data[signal_category] = pd.DataFrame(columns=["read_id", "signal"])
 
-            new_row = pd.DataFrame({"read_id": [str(read.read_id)], "signal": [read.signal[:2**signal_category]]})
-            data[signal_category] = pd.concat([data[signal_category], new_row], ignore_index=True)
+            new_row = pd.DataFrame(
+                {
+                    "read_id": [str(read.read_id)],
+                    "signal": [read.signal[: 2**signal_category]],
+                }
+            )
+            data[signal_category] = pd.concat(
+                [data[signal_category], new_row], ignore_index=True
+            )
 
     categories = data.keys()
 
@@ -46,7 +53,7 @@ def test_parquet():
     print("Parquet length:", len(read_df))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # todo: verify if cliveome present, if not download (maybe ask for permission)
     main()
     test_parquet()

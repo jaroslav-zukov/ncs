@@ -1,22 +1,49 @@
 import numpy as np
 import pywt
 
+from src.ncs.exact_tree_projection import tree_projection
+from src.ncs.wt_coeffs import WtCoeffs
+
 
 def main():
     print("Wavelet test")
 
     signal = np.arange(1024)
 
-    wavelets = pywt.wavelist(kind='discrete')
+    wavelets = pywt.wavelist(kind="discrete")
     orthogonal_wavelets = [w for w in wavelets if pywt.Wavelet(w).orthogonal]
 
     print(f"Orthogonal wavelets ({len(orthogonal_wavelets)}): {orthogonal_wavelets}")
 
-    wave = 'sym7'
+    wave = "haar"
 
-    wt_signal = pywt.wavedec(signal, wavelet=wave, level=None, mode='periodization')
-    print(f"Wavelet waves ({len(wt_signal)}): {[len(arr) for arr in wt_signal]}")
+    wt_coeff_groups = pywt.wavedec(
+        signal, wavelet=wave, level=None, mode="periodization"
+    )
+    print(
+        f"Wavelet waves ({len(wt_coeff_groups)}): {[len(arr) for arr in wt_coeff_groups]}"
+    )
+
+    wt_coeffs = WtCoeffs(wt_coeff_groups)
+    print(f"Max level {wt_coeffs.max_level}")
+    print(f"Root count {wt_coeffs.root_count}")
+    all_coeffs = wt_coeffs.get_flat_coeffs()
+    print(f"All coeffs length: {len(all_coeffs)}")
+
+    flat_coeffs = np.zeros_like(all_coeffs)
+    flat_coeffs[0] = all_coeffs[0]
+
+    second_constructor_coeffs = WtCoeffs.from_flat_coeffs(
+        flat_coeffs, wt_coeffs.root_count, wt_coeffs.max_level
+    )
+
+    # for level in range(wt_coeffs.max_level+1):
+    #     print(f"Level {level}: len original coeffs: {len(wt_coeffs.coeff_groups[level])}, new coeffs: {len(second_constructor_coeffs.coeff_groups[level])}")
+    #     print(f"Elemenwise equal: {np.all(wt_coeffs.coeff_groups[level] == second_constructor_coeffs.coeff_groups[level])}")
+
+    projected_wt = tree_projection(wt_coeffs, 1)
+    print(f"Project onto itself: {second_constructor_coeffs == projected_wt}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
