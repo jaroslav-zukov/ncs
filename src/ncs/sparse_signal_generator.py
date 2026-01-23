@@ -8,7 +8,8 @@ from src.ncs.wt_coeffs import WtCoeffs
 def generate_tree_sparse_coeffs(power: int, count: int, tree_sparsity: int, wavelet: str) -> list[WtCoeffs]:
     n = 2 ** power
 
-    np.random.seed(420)
+    seed = None
+    np.random.seed(seed)
     random_signals = [np.random.randint(low=-300, high=300, size=n) for _ in range(count)]
 
     random_wt_coeffs: list[WtCoeffs] = [forward_transform(signal, wavelet) for signal in random_signals]
