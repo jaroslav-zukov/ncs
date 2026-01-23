@@ -106,6 +106,7 @@ dependencies = [
     { name = "pandas" },
     { name = "pod5" },
     { name = "pywavelets" },
+    { name = "tqdm" },
 ]
 
 [package.dev-dependencies]
@@ -118,6 +119,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "pod5", specifier = ">=0.3.35" },
     { name = "pywavelets", specifier = ">=1.9.0" },
+    { name = "tqdm", specifier = ">=4.67.1" },
 ]
 
 [package.metadata.requires-dev]

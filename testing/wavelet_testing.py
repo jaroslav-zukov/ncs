@@ -45,6 +45,8 @@ def main():
     print(f"Project onto itself: {second_constructor_coeffs == projected_wt}")
     # TODO: make a proper test like this for each component
 
+    print(f"N: {projected_wt.n}")
+
 
 if __name__ == "__main__":
     main()

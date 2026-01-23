@@ -57,10 +57,31 @@ class WtCoeffs:
     def flat_coeffs(self):
         return np.concatenate(self.coeff_groups)
 
-    # @property
-    # def cA(self):
-    #     return self.coeff_groups[0]
-    #
-    # @property
-    # def cD(self):
-    #     return self.coeff_groups[1:]
+    @property
+    def support(self):
+        return set(np.nonzero(self.flat_coeffs)[0])
+
+    @property
+    def n(self):
+        return len(self.flat_coeffs)
+
+    def on_support(self, support):
+        """
+        Create a copy with values only at specified support indices.
+
+        Args:
+            support: Set or array of indices where values should be non-zero
+
+        Returns:
+            New WtCoeffs with values only at support indices
+        """
+        flat_coeffs = np.zeros(self.n)
+        support_indices = list(support)
+        flat_coeffs[support_indices] = self.flat_coeffs[support_indices]
+
+        return WtCoeffs.from_flat_coeffs(
+            flat_coeffs=flat_coeffs,
+            root_count=self.root_count,
+            max_level=self.max_level,
+            wavelet=self.wavelet,
+        )
