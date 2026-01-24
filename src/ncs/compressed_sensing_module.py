@@ -12,11 +12,14 @@ def measure_and_reconstruct(
     reconstruction_mode: str,
     coeffs_x: WtCoeffs,
     target_tree_sparsity: int,
+    seed: int | None = None,
 ) -> WtCoeffs:
     signal_z = inverse_transform(coeffs_x)
     n = coeffs_x.n
 
-    measurement_op, adjoint_op = create_measurement_operator(measurement_mode, n, m)
+    measurement_op, adjoint_op = create_measurement_operator(
+        measurement_mode, n, m, seed
+    )
 
     y = measurement_op(signal_z)
 
