@@ -33,7 +33,9 @@ def main():
     flat_coeffs = np.zeros_like(all_coeffs)
     flat_coeffs[0] = all_coeffs[0]
 
-    print(wt_coeff_groups)
+    for group in wt_coeff_groups:
+        for coeff in group:
+            print(f"{coeff:.1f},")
 
     # second_constructor_coeffs = WtCoeffs.from_flat_coeffs(
     #     flat_coeffs, wt_coeffs.root_count, wt_coeffs.max_level, wave
