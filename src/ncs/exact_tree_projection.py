@@ -28,9 +28,6 @@ def tree_projection(wt_coeffs: WtCoeffs, k: int) -> WtCoeffs:
     n = len(y)
     max_level = wt_coeffs.max_level
 
-    if k > n / 2:
-        raise ValueError(f"Target sparsity too high - more than n/2={n / 2}")
-
     def subtree_size(level):
         return min(int((d ** (max_level + 1 - level) - 1) / (d - 1)), k - level)
 

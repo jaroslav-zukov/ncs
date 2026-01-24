@@ -1,5 +1,6 @@
 import pytest
-from numpy import array, testing
+from numpy import array
+from numpy.testing import assert_array_equal
 
 from src.ncs.wt_coeffs import WtCoeffs
 
@@ -69,7 +70,7 @@ def test_multi_root_structure():
 )
 def test_flat_coeffs(coeff_groups, expected_flat):
     wt_coeffs = WtCoeffs(coeff_groups=coeff_groups, wavelet="haar")
-    testing.assert_array_equal(wt_coeffs.flat_coeffs, expected_flat)
+    assert_array_equal(wt_coeffs.flat_coeffs, expected_flat)
     assert len(wt_coeffs.flat_coeffs) == len(expected_flat)
 
 
@@ -151,10 +152,10 @@ def test_from_flat_coeffs():
 
     expected_groups = [[1], [2], [3, 4]]
     for i, expected in enumerate(expected_groups):
-        testing.assert_array_equal(wt_coeffs.coeff_groups[i], expected)
+        assert_array_equal(wt_coeffs.coeff_groups[i], expected)
     assert wt_coeffs.max_level == 2
     assert wt_coeffs.root_count == 1
-    testing.assert_array_equal(wt_coeffs.flat_coeffs, flat)
+    assert_array_equal(wt_coeffs.flat_coeffs, flat)
 
     # Test multiple roots structure
     flat = [1, 2, 3, 4, 5, 6, 7, 8]
@@ -164,10 +165,10 @@ def test_from_flat_coeffs():
 
     expected_groups = [[1, 2], [3, 4], [5, 6, 7, 8]]
     for i, expected in enumerate(expected_groups):
-        testing.assert_array_equal(wt_coeffs.coeff_groups[i], expected)
+        assert_array_equal(wt_coeffs.coeff_groups[i], expected)
     assert wt_coeffs.max_level == 2
     assert wt_coeffs.root_count == 2
-    testing.assert_array_equal(wt_coeffs.flat_coeffs, flat)
+    assert_array_equal(wt_coeffs.flat_coeffs, flat)
 
     # Test larger structure
     flat = list(range(1, 33))
@@ -182,7 +183,7 @@ def test_from_flat_coeffs():
         [17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32],
     ]
     for i, expected in enumerate(expected_groups):
-        testing.assert_array_equal(wt_coeffs.coeff_groups[i], expected)
+        assert_array_equal(wt_coeffs.coeff_groups[i], expected)
     assert wt_coeffs.wavelet == "db2"
 
     # Test with numpy array
@@ -190,7 +191,7 @@ def test_from_flat_coeffs():
     wt_coeffs = WtCoeffs.from_flat_coeffs(
         flat, root_count=1, max_level=2, wavelet="haar"
     )
-    testing.assert_array_equal(wt_coeffs.flat_coeffs, flat)
+    assert_array_equal(wt_coeffs.flat_coeffs, flat)
 
     # Test invalid length
     with pytest.raises(ValueError, match="Invalid flat_coeffs length"):
@@ -235,4 +236,4 @@ def test_on_support():
     # Test immutability of original instance - on support returns new instance
     original_flat = wt_coeffs.flat_coeffs.copy()
     wt_coeffs.on_support({0})
-    testing.assert_array_equal(wt_coeffs.flat_coeffs, original_flat)
+    assert_array_equal(wt_coeffs.flat_coeffs, original_flat)

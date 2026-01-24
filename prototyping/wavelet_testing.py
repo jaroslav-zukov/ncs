@@ -8,7 +8,7 @@ from src.ncs.wt_coeffs import WtCoeffs
 def main():
     print("Wavelet test")
 
-    signal = np.arange(16)
+    signal = np.arange(8)
 
     wavelets = pywt.wavelist(kind="discrete")
     orthogonal_wavelets = [w for w in wavelets if pywt.Wavelet(w).orthogonal]
