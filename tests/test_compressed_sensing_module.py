@@ -22,10 +22,17 @@ def test_measure_and_reconstruct(mocker):
     mock_adjoint_op = mocker.Mock()
     mock_x_hat = mocker.Mock(spec=WtCoeffs)
 
-    mocker.patch("ncs.compressed_sensing_module.inverse_transform", return_value=mock_signal_z)
-    mock_create_meas = mocker.patch("ncs.compressed_sensing_module.create_measurement_operator", return_value=(mock_measurement_op, mock_adjoint_op))
+    mocker.patch(
+        "ncs.compressed_sensing_module.inverse_transform", return_value=mock_signal_z
+    )
+    mock_create_meas = mocker.patch(
+        "ncs.compressed_sensing_module.create_measurement_operator",
+        return_value=(mock_measurement_op, mock_adjoint_op),
+    )
     mocker.patch("ncs.compressed_sensing_module.WtCoeffs.from_flat_coeffs")
-    mock_reconstruct = mocker.patch("ncs.compressed_sensing_module.reconstruct", return_value=mock_x_hat)
+    mock_reconstruct = mocker.patch(
+        "ncs.compressed_sensing_module.reconstruct", return_value=mock_x_hat
+    )
 
     result = measure_and_reconstruct(
         measurement_mode=measurement_mode,
@@ -35,7 +42,7 @@ def test_measure_and_reconstruct(mocker):
         target_tree_sparsity=target_tree_sparsity,
     )
 
-    mock_create_meas.assert_called_once_with(measurement_mode, n, m)
+    mock_create_meas.assert_called_once_with(measurement_mode, n, m, None)
 
     mock_reconstruct.assert_called_once()
     call_kwargs = mock_reconstruct.call_args.kwargs
