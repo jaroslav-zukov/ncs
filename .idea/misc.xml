@@ -6,5 +6,6 @@
   <component name="ProjectRootManager" version="2" project-jdk-name="uv (ncs)" project-jdk-type="Python SDK" />
   <component name="RuffConfiguration">
     <option name="enabled" value="true" />
+    <option name="inspections" value="false" />
   </component>
 </project>

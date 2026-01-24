@@ -125,7 +125,6 @@ dependencies = [
     { name = "pytest" },
     { name = "pytest-mock" },
     { name = "pywavelets" },
-    { name = "ruff" },
     { name = "tqdm" },
 ]
 
@@ -141,7 +140,6 @@ requires-dist = [
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-mock", specifier = ">=3.15.1" },
     { name = "pywavelets", specifier = ">=1.9.0" },
-    { name = "ruff", specifier = ">=0.14.13" },
     { name = "tqdm", specifier = ">=4.67.1" },
 ]
 

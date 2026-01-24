@@ -10,20 +10,15 @@ dependencies = [
     "pytest>=9.0.2",
     "pytest-mock>=3.15.1",
     "pywavelets>=1.9.0",
-    "ruff>=0.14.13",
     "tqdm>=4.67.1",
 ]
 
 [dependency-groups]
-dev = [
-    "ruff>=0.14.14",
-]
+dev = ["ruff>=0.14.14" ]
 
 [tool.pytest.ini_options]
 addopts = "-v"
-testpaths = [
-    "tests",
-]
+testpaths = ["tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
 
