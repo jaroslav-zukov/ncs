@@ -3,16 +3,26 @@ name = "ncs"
 version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.12"
+
 dependencies = [
-    "pandas>=2.3.3",
+    "pandas>=3.0.0",
     "pod5>=0.3.35",
     "pytest>=9.0.2",
     "pytest-mock>=3.15.1",
     "pywavelets>=1.9.0",
+    "ruff>=0.14.13",
     "tqdm>=4.67.1",
 ]
 
 [dependency-groups]
 dev = [
-    "ruff>=0.14.13",
+    "ruff>=0.14.14",
 ]
+
+[tool.pytest.ini_options]
+addopts = "-v"
+testpaths = [
+    "tests",
+]
+python_files = "test_*.py"
+python_functions = "test_*"
