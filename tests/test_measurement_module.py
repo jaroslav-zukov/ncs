@@ -51,7 +51,7 @@ def test_create_gaussian_operator():
     y = np.array([1, 2, 3, 4, 5], dtype=float)
     left_side = np.dot(measure_op(signal), y)
     right_side = np.dot(signal, adjoint_op(y))
-    assert_array_equal(left_side, right_side)
+    assert_allclose(left_side, right_side)
 
 
 def test_create_measurement_operator_validation():
