@@ -7,6 +7,7 @@ The stuff that I left for later:
 
 ___
 For formatting run
+TODO: Set up the precommit hook, so that this happens before every commit 
 ``` shell
 uv run ruff format .
 ```

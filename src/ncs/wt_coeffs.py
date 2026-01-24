@@ -24,6 +24,8 @@ class WtCoeffs:
                 "Try setting pywt.wavedec mode='periodization'"
             )
 
+        # TODO: Hide the validation into a separate function, add the root size validation based on the wavelet filter length
+
     @classmethod
     def from_flat_coeffs(cls, flat_coeffs, root_count, max_level, wavelet):
         if len(flat_coeffs) != root_count * (2**max_level):

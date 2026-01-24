@@ -53,10 +53,15 @@ def load_signal(power, count, source="cliveome"):
     signals = []
 
     if source == "cliveome":
-        # todo: verify cliveome parquet file exists -> else advice to run cliveome setup script
-        read_table = pq.read_table(
-            PROCESSED_DATA_DIR / f"cliveome_category_{power}.parquet"
-        )
+        parquet_file = PROCESSED_DATA_DIR / f"cliveome_category_{power}.parquet"
+
+        if not parquet_file.exists():
+            raise FileNotFoundError(
+                f"Parquet file not found: {parquet_file}\n"
+                f"Please run the cliveome setup script to generate processed data files."
+            )
+
+        read_table = pq.read_table(parquet_file)
         read_df = read_table.to_pandas()
         signals = read_df.head(count)["signal"]
 
