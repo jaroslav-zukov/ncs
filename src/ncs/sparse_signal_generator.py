@@ -6,14 +6,15 @@ from src.ncs.wt_coeffs import WtCoeffs
 
 
 def generate_tree_sparse_coeffs(
-    power: int, count: int, tree_sparsity: int, wavelet: str
+    power: int,
+    count: int,
+    tree_sparsity: int,
+    wavelet: str,
+    seed: int = None,
 ) -> list[WtCoeffs]:
-    n = 2**power
-
-    seed = None
     np.random.seed(seed)
     random_signals = [
-        np.random.randint(low=-300, high=300, size=n) for _ in range(count)
+        np.random.randint(low=-300, high=300, size=2**power) for _ in range(count)
     ]
 
     random_wt_coeffs: list[WtCoeffs] = [
@@ -27,10 +28,14 @@ def generate_tree_sparse_coeffs(
 
 
 def generate_tree_sparse_signals(
-    power: int, count: int, tree_sparsity: int, wavelet: str
+    power: int,
+    count: int,
+    tree_sparsity: int,
+    wavelet: str,
+    seed: int = None,
 ):
     tree_sparse_coeffs: list[WtCoeffs] = generate_tree_sparse_coeffs(
-        power, count, tree_sparsity, wavelet
+        power, count, tree_sparsity, wavelet, seed
     )
     tree_sparse_signals: list[np.ndarray] = [
         inverse_transform(wt_coeffs) for wt_coeffs in tree_sparse_coeffs
