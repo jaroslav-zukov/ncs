@@ -1,6 +1,6 @@
 from numpy.testing import assert_allclose
 
-from src.ncs.sparse_signal_generator import (
+from ncs.sparse_signal_generator import (
     generate_tree_sparse_coeffs,
     generate_tree_sparse_signals,
 )

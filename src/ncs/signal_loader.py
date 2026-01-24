@@ -1,6 +1,6 @@
 import pyarrow.parquet as pq
 
-from src.ncs.config import PROCESSED_DATA_DIR
+from ncs.config import PROCESSED_DATA_DIR
 
 supported_sources = ["cliveome"]
 

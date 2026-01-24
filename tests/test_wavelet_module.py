@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
-from src.ncs.wavelet_module import forward_transform, inverse_transform
-from src.ncs.wt_coeffs import WtCoeffs
+from ncs.wavelet_module import forward_transform, inverse_transform
+from ncs.wt_coeffs import WtCoeffs
 
 
 def test_forward_transform():

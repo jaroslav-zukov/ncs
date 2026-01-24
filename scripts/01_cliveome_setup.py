@@ -6,7 +6,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pod5
 
-from src.ncs.config import RAW_DATA_DIR, PROCESSED_DATA_DIR
+from ncs.config import RAW_DATA_DIR, PROCESSED_DATA_DIR
 
 
 def main():

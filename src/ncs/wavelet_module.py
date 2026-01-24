@@ -1,7 +1,7 @@
 import numpy as np
 import pywt
 
-from src.ncs.wt_coeffs import WtCoeffs
+from ncs.wt_coeffs import WtCoeffs
 
 
 def get_orthogonal_wavelets():

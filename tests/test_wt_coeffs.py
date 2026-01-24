@@ -2,7 +2,7 @@ import pytest
 from numpy import array
 from numpy.testing import assert_array_equal
 
-from src.ncs.wt_coeffs import WtCoeffs
+from ncs.wt_coeffs import WtCoeffs
 
 
 def test_init_empty_coeff_groups():

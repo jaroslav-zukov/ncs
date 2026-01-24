@@ -1,7 +1,7 @@
 import numpy as np
 
-from src.ncs.compressed_sensing_module import measure_and_reconstruct
-from src.ncs.sparse_signal_generator import generate_tree_sparse_coeffs
+from ncs.compressed_sensing_module import measure_and_reconstruct
+from ncs.sparse_signal_generator import generate_tree_sparse_coeffs
 
 
 def main():

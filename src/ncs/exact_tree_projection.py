@@ -1,4 +1,4 @@
-from src.ncs.wt_coeffs import WtCoeffs
+from ncs.wt_coeffs import WtCoeffs
 
 
 class MathArray:

@@ -3,9 +3,9 @@ from typing import Callable
 import numpy as np
 from tqdm import tqdm
 
-from src.ncs.exact_tree_projection import tree_projection
-from src.ncs.wavelet_module import forward_transform, inverse_transform
-from src.ncs.wt_coeffs import WtCoeffs
+from ncs.exact_tree_projection import tree_projection
+from ncs.wavelet_module import forward_transform, inverse_transform
+from ncs.wt_coeffs import WtCoeffs
 
 
 def cosamp_reconstruct(

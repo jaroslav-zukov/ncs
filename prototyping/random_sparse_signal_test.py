@@ -1,4 +1,4 @@
-from src.ncs.sparse_signal_generator import generate_tree_sparse_signals
+from ncs.sparse_signal_generator import generate_tree_sparse_signals
 
 
 def main():
