@@ -1,0 +1,27 @@
+name: Tests
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+          enable-cache: true  # Automatically caches your .venv!
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run pytest
+        run: uv run pytest

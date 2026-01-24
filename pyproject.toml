@@ -26,3 +26,7 @@ testpaths = [
 ]
 python_files = "test_*.py"
 python_functions = "test_*"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
