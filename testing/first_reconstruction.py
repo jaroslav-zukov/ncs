@@ -7,20 +7,17 @@ from src.ncs.sparse_signal_generator import generate_tree_sparse_coeffs
 def main():
     print("Testing reconstruction pipeline")
 
-    tree_sparsity = 160
+    tree_sparsity = 60
     sparse_coeff = generate_tree_sparse_coeffs(
-        power=14,
-        count=1,
-        tree_sparsity=tree_sparsity,
-        wavelet='haar'
+        power=10, count=1, tree_sparsity=tree_sparsity, wavelet="haar"
     )[0]
 
     x_hat = measure_and_reconstruct(
-        measurement_mode='gaussian',
-        m = 1000,
-        reconstruction_mode='CoSaMP',
+        measurement_mode="gaussian",
+        m=300,
+        reconstruction_mode="CoSaMP",
         coeffs_x=sparse_coeff,
-        target_tree_sparsity=tree_sparsity
+        target_tree_sparsity=tree_sparsity,
     )
 
     flat_sparse_coeffs = sparse_coeff.flat_coeffs
@@ -32,12 +29,13 @@ def main():
 
     original_support = sparse_coeff.support
     reconstructed_support = x_hat.support
-    print(f"Localized support: {len(original_support & reconstructed_support)}, "
-          f"missed support({len(original_support - reconstructed_support)}): {original_support - reconstructed_support}")
+    print(
+        f"Localized support: {len(original_support & reconstructed_support)}, "
+        f"missed support({len(original_support - reconstructed_support)}): {original_support - reconstructed_support}"
+    )
 
     for index, num in [(i, difference[i]) for i in nonzero_indices]:
         print(index, num)
-
 
 
 if __name__ == "__main__":

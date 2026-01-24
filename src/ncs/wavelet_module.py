@@ -23,5 +23,6 @@ def forward_transform(signal: np.ndarray, wavelet):
     )
     return WtCoeffs(wt_coeff_groups, wavelet)
 
+
 def inverse_transform(wt_coeffs: WtCoeffs) -> np.ndarray:
     return pywt.waverec(wt_coeffs.coeff_groups, wt_coeffs.wavelet, mode="periodization")
