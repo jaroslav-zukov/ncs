@@ -6,6 +6,7 @@
       <sourceFolder url="file://$MODULE_DIR$/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/data" />
+      <excludeFolder url="file://$MODULE_DIR$/src/ncs.egg-info" />
     </content>
     <orderEntry type="jdk" jdkName="uv (ncs)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
