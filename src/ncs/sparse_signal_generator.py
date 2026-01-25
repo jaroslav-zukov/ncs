@@ -42,3 +42,36 @@ def generate_tree_sparse_signals(
     ]
 
     return tree_sparse_signals
+
+
+def add_noise_to_coeffs(
+    tree_sparse_signals: list[WtCoeffs],
+    noise_epsilon: float,
+    noise_mode: str,
+    seed: int | None = None,
+):
+    supported_noise_modes: set[str] = {"gaussian", "uniform"}
+    if noise_mode not in supported_noise_modes:
+        raise ValueError(f"Noise mode {noise_mode} not supported. (use {supported_noise_modes})")
+
+    if seed is not None:
+        np.random.seed(seed)
+
+    noisy_coeffs: list[WtCoeffs] = []
+
+    for wt_coeffs in tree_sparse_signals:
+        signal_z = inverse_transform(wt_coeffs)
+
+        noise_diameter = int(noise_epsilon * 600)
+
+        if noise_mode == "gaussian":
+            noise = np.random.randn(wt_coeffs.n) * noise_diameter / 3
+            noisy_signal = signal_z + noise
+        else:
+            noise = np.random.randint(
+                low=-noise_diameter, high=noise_diameter, size=wt_coeffs.n
+            )
+            noisy_signal = signal_z + noise
+        noisy_coeffs.append(forward_transform(noisy_signal, wt_coeffs.wavelet))
+
+    return noisy_coeffs
