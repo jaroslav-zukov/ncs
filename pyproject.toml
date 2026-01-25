@@ -7,14 +7,16 @@ requires-python = ">=3.12"
 dependencies = [
     "pandas>=3.0.0",
     "pod5>=0.3.35",
-    "pytest>=9.0.2",
-    "pytest-mock>=3.15.1",
     "pywavelets>=1.9.0",
     "tqdm>=4.67.1",
 ]
 
 [dependency-groups]
-dev = ["ruff>=0.14.14" ]
+dev = [
+    "ruff>=0.14.14",
+    "pytest>=9.0.2",
+    "pytest-mock>=3.15.1",
+]
 
 [tool.pytest.ini_options]
 addopts = "-v"
