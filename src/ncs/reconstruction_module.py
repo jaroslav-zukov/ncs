@@ -18,7 +18,7 @@ def cosamp_reconstruct(
     x_hat = x_init
     wavelet = x_init.wavelet
     r = np.copy(y)
-    iteration_threshold = 50
+    iteration_threshold = 20
 
     for _ in tqdm(range(iteration_threshold), desc="CoSaMP iterations", disable=True):
         upsampled_r = adjoint_op(r)
