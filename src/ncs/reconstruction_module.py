@@ -20,7 +20,7 @@ def cosamp_reconstruct(
     r = np.copy(y)
     iteration_threshold = 50
 
-    for _ in tqdm(range(iteration_threshold), desc="CoSaMP iterations"):
+    for _ in tqdm(range(iteration_threshold), desc="CoSaMP iterations", disable=True):
         upsampled_r = adjoint_op(r)
         e_coeffs = forward_transform(upsampled_r, wavelet)
         e_double_support = tree_projection(e_coeffs, 2 * tree_sparsity).support
