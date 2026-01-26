@@ -169,7 +169,7 @@ def plot_noisy_signal_reconstruction_data(
     params = {
         "N": n,
         "Tree-sparsity": tree_sparsity,
-        "Noise-Epsilon": noise_epsilon,
+        "Noise-Epsilon": f"{noise_epsilon:.2f}",
         "Noise-Mode": noise_mode,
         "Wavelet": wavelet,
         "Measurement": measurement_mode,
