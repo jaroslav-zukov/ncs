@@ -9,7 +9,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from ncs.compressed_sensing_module import measure_and_reconstruct
 from ncs.sparse_signal_generator import generate_tree_sparse_coeffs, add_noise_to_coeffs
 from ncs.wavelet_module import inverse_transform
-import os
 
 
 def _worker_for_m(
@@ -52,7 +51,7 @@ def _run_parallel_experiment(
     reconstruction_mode,
     tree_sparsity,
     attempts,
-    max_workers=os.cpu_count(),
+    max_workers=None,
 ):
     """
     Orchestrates the parallel execution over m_values.
@@ -101,7 +100,7 @@ def generate_random_sparse_signal_reconstruction_data(
     signal_count,
     reconstruction_attempts,
     m_values,
-    max_workers=os.cpu_count(),
+    max_workers=None,  # New parameter to control threads
 ):
     sparse_coeffs = generate_tree_sparse_coeffs(
         power=n_power,
@@ -149,7 +148,7 @@ def plot_noisy_signal_reconstruction_data(
     signal_count,
     reconstruction_attempts,
     m_values,
-    max_workers=os.cpu_count(),
+    max_workers=None,  # New parameter to control threads
 ):
     sparse_coeffs = generate_tree_sparse_coeffs(
         power=n_power,
