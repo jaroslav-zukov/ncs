@@ -37,6 +37,7 @@ def tree_projection(wt_coeffs: WtCoeffs, k: int) -> WtCoeffs:
     f_temp = {}
     g_temp = {}
 
+    # Calculate tables for leaves
     for i in range(d ** (max_level - 1) + 1, d**max_level + 1):
         f[(i, 0)] = 0
         f[(i, 1)] = y[i] ** 2
@@ -44,25 +45,31 @@ def tree_projection(wt_coeffs: WtCoeffs, k: int) -> WtCoeffs:
         g[(i, 0)] = 0
         g[(i, 1)] = 0
 
+    # Iterate through level j from max-1 to root-1, leaving the root level for later
     for j in range(max_level - 1, 0, -1):
+        # Iterate through node i (calculate energy tables for subtrees rooted at i)
         for i in range(d ** (j - 1) + 1, (d**j) + 1):
             f[(i, 0)] = 0
             f[(i, 1)] = y[i] ** 2
             g[(i, 0)] = [0, 0]
             g[(i, 1)] = [0, 0]
 
+            # r=1 left, r=2 right child
             for r in range(1, d + 1):
+                # Iterate l through possible subtree cardinalities (l cardinality budget)
                 for l in range(
                     2, min(subtree_size(j), r * subtree_size(j + 1) + 1) + 1
                 ):
+                    # Corrected lower bound as opposed to paper
+                    # s_minus can be 0 - we skip the child r then completely
                     s_minus = max(0, l - ((r - 1) * subtree_size(j + 1) + 1))
                     s_plus = min(l - 1, subtree_size(j + 1))
 
+                    # Calculate optimal split: How many nodes from budget l should go to child r
                     s_hat = max(
                         range(s_minus, s_plus + 1),
                         key=lambda s: f[(d * (i - 1) + r, s)] + f[(i, l - s)],
                     )
-
                     f_temp[(i, l)] = f[d * (i - 1) + r, s_hat] + f[(i, l - s_hat)]
 
                     g_temp[(i, l)] = list(g[(i, l - s_hat)])
@@ -79,9 +86,11 @@ def tree_projection(wt_coeffs: WtCoeffs, k: int) -> WtCoeffs:
     g[(1, 0)] = [0, 0]
     g[(1, 1)] = [0, 0]
 
+    # Last root-level calculation
     for r in range(2, d + 1):
         for l in range(2, min(k, (r - 1) * subtree_size(1) + 1) + 1):
-            s_minus = max(1, l - ((r - 2) * subtree_size(1) + 1))
+            # Allowing s_minus to be 0 and skip the whole branch (all detail coeffs)
+            s_minus = max(0, l - ((r - 2) * subtree_size(1) + 1))
             s_plus = min(l - 1, subtree_size(1))
             s_hat = max(
                 range(s_minus, s_plus + 1), key=lambda s: f[(r, s)] + f[(1, l - s)]
@@ -101,9 +110,13 @@ def tree_projection(wt_coeffs: WtCoeffs, k: int) -> WtCoeffs:
     gamma = MathArray([0] * n)
     gamma[1] = k
 
+    # Coarse to fine pass: Iterate j from root level to max-1
     for j in range(max_level):
         start_node = 1 if j == 0 else d ** (j - 1) + 1
-
+        # Iterate over the level nodes (incorrect paper pseudocode)
+        # j=0: i in 1
+        # j=1: i in 2
+        # j=2: i in 3..4
         for i in range(start_node, d**j + 1):
             if tau[i] == 1:
                 for r in range(max(1, 2 - j), d + 1):
