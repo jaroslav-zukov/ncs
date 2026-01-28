@@ -108,7 +108,7 @@ def main():
                         key=lambda s: f[(d * (i - 1) + r, s)] + f[(i, l - s)],
                     )
                     print(f"{'\t' * 7}Calculated s_hat: {s_hat}")
-                    # d * (i - 1) + r -> refers to the r-th child in a d-ary tree/forest (for level 1 and lower)
+                    # d * (i - 1) + r -> refers to the r-th child of node i in a d-ary tree/forest (for level 1 and lower)
                     f_temp[(i, l)] = f[d * (i - 1) + r, s_hat] + f[(i, l - s_hat)]
 
                     g_temp[(i, l)] = list(g[(i, l - s_hat)])
@@ -130,11 +130,6 @@ def main():
     print_table("f", f)
     print_table("g", g)
     print("-" * 40)
-
-    f[(1, 0)] = 0
-    f[(1, 1)] = y[1] ** 2
-    g[(1, 0)] = [0, 0]
-    g[(1, 1)] = [0, 0]
 
     print(f"Multi-root level calculation")
     print(f"Iterating i through {range(1, root_count + 1)}")
@@ -175,6 +170,47 @@ def main():
             for l in range(2, min(k, (r - 1) * subtree_size(1) + 1) + 1):
                 f[(i, l)] = f_temp[(i, l)]
                 g[(i, l)] = g_temp[(i, l)]
+
+    print("-" * 40)
+    print_table("f", f)
+    print_table("g", g)
+    print("-" * 40)
+
+    f[(0, 0)] = 0
+    f[(0, 1)] = 0
+    g[(0, 0)] = [0] * root_count
+    g[(0, 1)] = [0] * root_count
+
+    child_max_size = subtree_size(1) + 1
+
+    print("Virtual root calculation")
+    for r in range(1, root_count + 1):
+        print(f"{'\t' * 1}r: {r} processing root {r}")
+        current_max_l = min(k, r * child_max_size + 1)
+        print(
+            f"{'\t' * 2}Iterating l through {range(1, current_max_l + 1)}"
+        )
+        for l in range(1, current_max_l + 1):
+            capacity_before = 1 + (r - 1) * child_max_size
+            print(f"{'\t' * 3}l: {l}")
+            s_minus = max(0, l - capacity_before)
+            print(f"{'\t' * 4}Calculated s_minus: {s_minus}")
+            s_plus = min(l - 1, child_max_size)
+            print(f"{'\t' * 4}Calculated s_plus: {s_plus}")
+            s_hat = max(
+                range(s_minus, s_plus + 1),
+                key=lambda s: f[(r, s)] + f[(0, l - s)],
+            )
+            print(f"{'\t' * 4}Calculated s_hat: {s_hat}")
+
+            f_temp[(0, l)] = f[(r, s_hat)] + f[0, l - s_hat]
+
+            g_temp[(0, l)] = list(g[(0, l - s_hat)])
+            g_temp[(0, l)][r - 1] = s_hat
+
+        for l in range(1, current_max_l + 1):
+            f[(0, l)] = f_temp[(0, l)]
+            g[(0, l)] = g_temp[(0, l)]
 
     print("-" * 40)
     print_table("f", f)
