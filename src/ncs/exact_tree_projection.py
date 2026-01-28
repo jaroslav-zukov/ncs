@@ -42,8 +42,8 @@ def tree_projection(wt_coeffs: WtCoeffs, k: int) -> WtCoeffs:
         f[(i, 0)] = 0
         f[(i, 1)] = y[i] ** 2
 
-        g[(i, 0)] = 0
-        g[(i, 1)] = 0
+        g[(i, 0)] = [0, 0]
+        g[(i, 1)] = [0, 0]
 
     # Iterate through level j from max-1 to root-1, leaving the root level for later
     for j in range(max_level - 1, 0, -1):

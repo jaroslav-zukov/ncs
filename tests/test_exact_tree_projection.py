@@ -16,7 +16,7 @@ from ncs.wt_coeffs import WtCoeffs
         ),
     ],
 )
-def test_tree_projection(coeff_groups, tree_sparsity, expected_flat_coeffs):
+def test_dyadic_tree_projection(coeff_groups, tree_sparsity, expected_flat_coeffs):
     wt_coeffs = WtCoeffs(coeff_groups, "haar")
 
     projected_coeffs = tree_projection(wt_coeffs, tree_sparsity)

@@ -44,11 +44,12 @@ def print_table(name, table_dict):
 
 
 def main():
-    y = MathArray([10, 10, 1, 50, 1, 1, 50, 50])
+    y = MathArray([16, 6, 14, 24, -5, 0, 0, 9, -2, 0, 0, 0, 0, 0, 0, 8])
     n = len(y)
     d = 2
-    max_level = 3
-    k = 6
+    max_level = 2
+    root_count = 4
+    k = 7
 
     def subtree_size(level):
         return min(int((d ** (max_level + 1 - level) - 1) / (d - 1)), k - level)
@@ -60,23 +61,27 @@ def main():
     g_temp = {}
 
     # leaves iterator
-    for i in range(d ** (max_level - 1) + 1, d**max_level + 1):
+    print(
+        f"Iterating through leaves with ids in "
+        f"{range(root_count * (d ** (max_level - 1)) + 1, root_count * (d**max_level) + 1)}"
+    )
+    for i in range(
+        root_count * (d ** (max_level - 1)) + 1, root_count * (d**max_level) + 1
+    ):
         f[(i, 0)] = 0
         f[(i, 1)] = y[i] ** 2
 
-        g[(i, 0)] = 0
-        g[(i, 1)] = 0
-
-    print(f"f: {f}")
-    print(f"g: {g}")
+        g[(i, 0)] = [0, 0]
+        g[(i, 1)] = [0, 0]
 
     # level iterator
     print("Entering level iterator")
-
-    for j in range(max_level - 1, 0, -1):  # j just like in paper
+    for j in range(max_level - 1, 0, -1):
         print(f"j: {j} (processing tree level {j})")
-        print(f"\tIterating i through {range(d ** (j - 1) + 1, (d**j) + 1)}")
-        for i in range(d ** (j - 1) + 1, (d**j) + 1):  # i just like in paper
+        print(
+            f"\tIterating i through {range(root_count * (d ** (j - 1)) + 1, (root_count * (d**j)) + 1)}"
+        )
+        for i in range(root_count * (d ** (j - 1)) + 1, (root_count * (d**j)) + 1):
             print(f"{'\t' * 2}i: {i} (processing node {i})")
             f[(i, 0)] = 0
             f[(i, 1)] = y[i] ** 2
@@ -103,7 +108,7 @@ def main():
                         key=lambda s: f[(d * (i - 1) + r, s)] + f[(i, l - s)],
                     )
                     print(f"{'\t' * 7}Calculated s_hat: {s_hat}")
-
+                    # d * (i - 1) + r -> refers to the r-th child in a d-ary tree/forest (for level 1 and lower)
                     f_temp[(i, l)] = f[d * (i - 1) + r, s_hat] + f[(i, l - s_hat)]
 
                     g_temp[(i, l)] = list(g[(i, l - s_hat)])
@@ -131,32 +136,45 @@ def main():
     g[(1, 0)] = [0, 0]
     g[(1, 1)] = [0, 0]
 
-    print(f"Iterating r through {range(2, d + 1)}")
-    for r in range(2, d + 1):
-        print(f"{'\t' * 1}r: {r}")
+    print(f"Multi-root level calculation")
+    print(f"Iterating i through {range(1, root_count + 1)}")
+    for i in range(1, root_count + 1):
+        f[(i, 0)] = 0
+        f[(i, 1)] = y[i] ** 2
+        g[(i, 0)] = [0, 0]
+        g[(i, 1)] = [0, 0]
 
-        print(
-            f"{'\t' * 2}Iterating l through {range(2, min(k, (r - 1) * subtree_size(1) + 1) + 1)}"
-        )
-        for l in range(2, min(k, (r - 1) * subtree_size(1) + 1) + 1):
-            print(f"{'\t' * 3}l: {l}")
-            s_minus = max(1, l - ((r - 2) * subtree_size(1) + 1))
-            print(f"{'\t' * 4}Calculated s_minus: {s_minus}")
-            s_plus = min(l - 1, subtree_size(1))
-            print(f"{'\t' * 4}Calculated s_plus: {s_plus}")
-            s_hat = max(
-                range(s_minus, s_plus + 1), key=lambda s: f[(r, s)] + f[(1, l - s)]
+        print(f"{'\t' * 1}i: {i} processing root {i}")
+        print(f"{'\t' * 1}Iterating r through {range(2, d + 1)}")
+        for r in range(
+            2, d + 1
+        ):  # r=2 the only child, I don't like this setup, should be simpler!
+            print(f"{'\t' * 1}r: {r}")
+
+            print(
+                f"{'\t' * 2}Iterating l through {range(2, min(k, (r - 1) * subtree_size(1) + 1) + 1)}"
             )
-            print(f"{'\t' * 4}Calculated s_hat: {s_hat}")
+            for l in range(2, min(k, (r - 1) * subtree_size(1) + 1) + 1):
+                print(f"{'\t' * 3}l: {l}")
+                s_minus = max(0, l - ((r - 2) * subtree_size(1) + 1))
+                print(f"{'\t' * 4}Calculated s_minus: {s_minus}")
+                s_plus = min(l - 1, subtree_size(1))
+                print(f"{'\t' * 4}Calculated s_plus: {s_plus}")
+                # We calculate a child index of a root i like this i+root_count, because level 1 is same size as root level
+                s_hat = max(
+                    range(s_minus, s_plus + 1),
+                    key=lambda s: f[(i + root_count, s)] + f[(i, l - s)],
+                )
+                print(f"{'\t' * 4}Calculated s_hat: {s_hat}")
 
-            f_temp[(1, l)] = f[(r, s_hat)] + f[(1, l - s_hat)]
+                f_temp[(i, l)] = f[(i + root_count, s_hat)] + f[(i, l - s_hat)]
 
-            g_temp[(1, l)] = list(g[(1, l - s_hat)])
-            g_temp[(1, l)][r - 1] = s_hat
+                g_temp[(i, l)] = list(g[(i, l - s_hat)])
+                g_temp[(i, l)][r - 1] = s_hat
 
-        for l in range(2, min(k, (r - 1) * subtree_size(1) + 1) + 1):
-            f[(1, l)] = f_temp[(1, l)]
-            g[(1, l)] = g_temp[(1, l)]
+            for l in range(2, min(k, (r - 1) * subtree_size(1) + 1) + 1):
+                f[(i, l)] = f_temp[(i, l)]
+                g[(i, l)] = g_temp[(i, l)]
 
     print("-" * 40)
     print_table("f", f)
