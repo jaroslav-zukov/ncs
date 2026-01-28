@@ -186,7 +186,7 @@ def main():
     print("Virtual root calculation")
     for r in range(1, root_count + 1):
         print(f"{'\t' * 1}r: {r} processing root {r}")
-        current_max_l = min(k, r * child_max_size + 1)
+        current_max_l = min(k+1, r * child_max_size + 1)
         print(
             f"{'\t' * 2}Iterating l through {range(1, current_max_l + 1)}"
         )
@@ -220,22 +220,57 @@ def main():
     print("Backtracking the solution")
 
     tau = MathArray([0] * n)
-    tau[1] = 1
     gamma = MathArray([0] * n)
-    gamma[1] = k
+
+    virtual_budget = k + 1
+    root_splits = g[(0, virtual_budget)]
+    print(f"Virtual Root splits for total budget {virtual_budget}: {root_splits}")
+
+    for r in range(1, root_count + 1):
+        assigned_budget = root_splits[r - 1]
+
+        if assigned_budget > 0:
+            tau[r] = 1
+            gamma[r] = assigned_budget
+        else:
+            tau[r] = 0
+            gamma[r] = 0
 
     for j in range(max_level):
         print(f"j: {j}")
 
-        start_node = 1 if j == 0 else d ** (j - 1) + 1
+        if j == 0:
+            start_node = 1
+            end_node = root_count + 1
+        else:
+            start_node = root_count * (d ** (j - 1)) + 1
+            end_node = root_count * (d ** j) + 1
 
-        print(f"Iterating i in {range(start_node, d**j + 1)}")
-        for i in range(start_node, d**j + 1):
+        print(f"Iterating i in {range(start_node, end_node)}")
+        for i in range(start_node, end_node):
             if tau[i] == 1:
-                for r in range(max(1, 2 - j), d + 1):
-                    if g[(i, gamma[i])][r - 1] > 0:
-                        tau[d * (i - 1) + r] = 1
-                        gamma[d * (i - 1) + r] = g[(i, gamma[i])][r - 1]
+                current_budget = gamma[i]
+
+                if (i, current_budget) not in g:
+                    continue
+
+                child_splits = g[(i, current_budget)]
+
+                for r in range(1, d + 1):
+                    budget_for_child = child_splits[r - 1]
+
+                    if budget_for_child > 0:
+                        if j == 0:
+                            # Special mapping for Roots -> Level 1
+                            if r == 2:
+                                child_idx = i + root_count
+                            else:
+                                continue
+                        else:
+                            child_idx = d * (i - 1) + r
+
+                        tau[child_idx] = 1
+                        gamma[child_idx] = budget_for_child
 
     print("\nCalculating solution\n")
 
