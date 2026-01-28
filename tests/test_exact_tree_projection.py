@@ -27,7 +27,7 @@ def test_dyadic_tree_projection(coeff_groups, tree_sparsity, expected_flat_coeff
     assert_array_equal(projected_coeffs.flat_coeffs, expected_flat_coeffs)
 
 
-def test_unsupported_root_size():
+def test_multi_root_setup():
     wt_coeffs = WtCoeffs([[1, 2, 3, 4], [5, 6, 7, 8]], wavelet="db2")
     projected_coeffs = tree_projection(wt_coeffs, 3)
 
