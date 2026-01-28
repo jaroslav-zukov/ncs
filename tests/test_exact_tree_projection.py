@@ -29,5 +29,9 @@ def test_dyadic_tree_projection(coeff_groups, tree_sparsity, expected_flat_coeff
 
 def test_unsupported_root_size():
     wt_coeffs = WtCoeffs([[1, 2, 3, 4], [5, 6, 7, 8]], wavelet="db2")
-    with pytest.raises(ValueError, match="Only root count 1 is supported"):
-        tree_projection(wt_coeffs, 3)
+    projected_coeffs = tree_projection(wt_coeffs, 3)
+
+    print(projected_coeffs.root_count)
+    print(projected_coeffs.max_level)
+    print(projected_coeffs.wavelet)
+    print(projected_coeffs.flat_coeffs)

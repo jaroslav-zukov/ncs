@@ -18,10 +18,7 @@ class MathArray:
 def tree_projection(wt_coeffs: WtCoeffs, k: int) -> WtCoeffs:
     root_count = wt_coeffs.root_count
 
-    if root_count != 1:
-        raise ValueError(
-            "Only root count 1 is supported at the moment (Use haar wavelet)"
-        )
+
 
     d = 2
     y = MathArray(wt_coeffs.flat_coeffs)
@@ -37,92 +34,204 @@ def tree_projection(wt_coeffs: WtCoeffs, k: int) -> WtCoeffs:
     f_temp = {}
     g_temp = {}
 
-    # Calculate tables for leaves
-    for i in range(d ** (max_level - 1) + 1, d**max_level + 1):
+    # leaves iterator
+    print(
+        f"Iterating through leaves with ids in "
+        f"{range(root_count * (d ** (max_level - 1)) + 1, root_count * (d ** max_level) + 1)}"
+    )
+    for i in range(
+            root_count * (d ** (max_level - 1)) + 1, root_count * (d ** max_level) + 1
+    ):
         f[(i, 0)] = 0
         f[(i, 1)] = y[i] ** 2
 
         g[(i, 0)] = [0, 0]
         g[(i, 1)] = [0, 0]
 
-    # Iterate through level j from max-1 to root-1, leaving the root level for later
+    # level iterator
+    print("Entering level iterator")
     for j in range(max_level - 1, 0, -1):
-        # Iterate through node i (calculate energy tables for subtrees rooted at i)
-        for i in range(d ** (j - 1) + 1, (d**j) + 1):
+        print(f"j: {j} (processing tree level {j})")
+        print(
+            f"\tIterating i through {range(root_count * (d ** (j - 1)) + 1, (root_count * (d ** j)) + 1)}"
+        )
+        for i in range(root_count * (d ** (j - 1)) + 1, (root_count * (d ** j)) + 1):
+            print(f"{'\t' * 2}i: {i} (processing node {i})")
             f[(i, 0)] = 0
             f[(i, 1)] = y[i] ** 2
             g[(i, 0)] = [0, 0]
             g[(i, 1)] = [0, 0]
 
-            # r=1 left, r=2 right child
-            for r in range(1, d + 1):
-                # Iterate l through possible subtree cardinalities (l cardinality budget)
+            print(f"{'\t' * 3}Iterating r through {range(1, d + 1)}")
+            for r in range(1, d + 1):  # r just like in paper
+                print(f"{'\t' * 4}r: {r} (processing child {r} of node {i})")
+                print(
+                    f"{'\t' * 5}Iterating l through {range(2, min(subtree_size(j), r * subtree_size(j + 1) + 1) + 1)}"
+                )
                 for l in range(
-                    2, min(subtree_size(j), r * subtree_size(j + 1) + 1) + 1
+                        2, min(subtree_size(j), r * subtree_size(j + 1) + 1) + 1
                 ):
-                    # Corrected lower bound as opposed to paper
-                    # s_minus can be 0 - we skip the child r then completely
+                    print(f"{'\t' * 6}l: {l} (calculating budget {l})")
                     s_minus = max(0, l - ((r - 1) * subtree_size(j + 1) + 1))
+                    print(f"{'\t' * 7}Calculated s_minus: {s_minus}")
                     s_plus = min(l - 1, subtree_size(j + 1))
+                    print(f"{'\t' * 7}Calculated s_plus: {s_plus}")
 
-                    # Calculate optimal split: How many nodes from budget l should go to child r
                     s_hat = max(
                         range(s_minus, s_plus + 1),
                         key=lambda s: f[(d * (i - 1) + r, s)] + f[(i, l - s)],
                     )
+                    print(f"{'\t' * 7}Calculated s_hat: {s_hat}")
+                    # d * (i - 1) + r -> refers to the r-th child of node i in a d-ary tree/forest (for level 1 and lower)
                     f_temp[(i, l)] = f[d * (i - 1) + r, s_hat] + f[(i, l - s_hat)]
 
                     g_temp[(i, l)] = list(g[(i, l - s_hat)])
+                    # updating the r-th coordinate of g_temp
                     g_temp[(i, l)][r - 1] = s_hat
 
+                print(
+                    f"{'\t' * 5}Iterating l through {range(2, min(subtree_size(j), r * subtree_size(j + 1) + 1) + 1)}"
+                )
                 for l in range(
-                    2, min(subtree_size(j), r * subtree_size(j + 1) + 1) + 1
+                        2, min(subtree_size(j), r * subtree_size(j + 1) + 1) + 1
                 ):
+                    print(f"{'\t' * 6}Updating f[({i}, {l})] = {f_temp[(i, l)]}")
                     f[(i, l)] = f_temp[(i, l)]
+                    print(f"{'\t' * 6}Updating g[({i}, {l})] = {g_temp[(i, l)]}")
                     g[(i, l)] = g_temp[(i, l)]
 
-    f[(1, 0)] = 0
-    f[(1, 1)] = y[1] ** 2
-    g[(1, 0)] = [0, 0]
-    g[(1, 1)] = [0, 0]
+    print(f"Multi-root level calculation")
+    print(f"Iterating i through {range(1, root_count + 1)}")
+    for i in range(1, root_count + 1):
+        f[(i, 0)] = 0
+        f[(i, 1)] = y[i] ** 2
+        g[(i, 0)] = [0, 0]
+        g[(i, 1)] = [0, 0]
 
-    # Last root-level calculation
-    for r in range(2, d + 1):
-        for l in range(2, min(k, (r - 1) * subtree_size(1) + 1) + 1):
-            # Allowing s_minus to be 0 and skip the whole branch (all detail coeffs)
-            s_minus = max(0, l - ((r - 2) * subtree_size(1) + 1))
-            s_plus = min(l - 1, subtree_size(1))
-            s_hat = max(
-                range(s_minus, s_plus + 1), key=lambda s: f[(r, s)] + f[(1, l - s)]
+        print(f"{'\t' * 1}i: {i} processing root {i}")
+        print(f"{'\t' * 1}Iterating r through {range(2, d + 1)}")
+        for r in range(
+                2, d + 1
+        ):  # r=2 the only child, I don't like this setup, should be simpler!
+            print(f"{'\t' * 1}r: {r}")
+
+            print(
+                f"{'\t' * 2}Iterating l through {range(2, min(k, (r - 1) * subtree_size(1) + 1) + 1)}"
             )
+            for l in range(2, min(k, (r - 1) * subtree_size(1) + 1) + 1):
+                print(f"{'\t' * 3}l: {l}")
+                s_minus = max(0, l - ((r - 2) * subtree_size(1) + 1))
+                print(f"{'\t' * 4}Calculated s_minus: {s_minus}")
+                s_plus = min(l - 1, subtree_size(1))
+                print(f"{'\t' * 4}Calculated s_plus: {s_plus}")
+                # We calculate a child index of a root i like this i+root_count, because level 1 is same size as root level
+                s_hat = max(
+                    range(s_minus, s_plus + 1),
+                    key=lambda s: f[(i + root_count, s)] + f[(i, l - s)],
+                )
+                print(f"{'\t' * 4}Calculated s_hat: {s_hat}")
 
-            f_temp[(1, l)] = f[(r, s_hat)] + f[(1, l - s_hat)]
+                f_temp[(i, l)] = f[(i + root_count, s_hat)] + f[(i, l - s_hat)]
 
-            g_temp[(1, l)] = list(g[(1, l - s_hat)])
-            g_temp[(1, l)][r - 1] = s_hat
+                g_temp[(i, l)] = list(g[(i, l - s_hat)])
+                g_temp[(i, l)][r - 1] = s_hat
 
-        for l in range(2, min(k, (r - 1) * subtree_size(1) + 1) + 1):
-            f[(1, l)] = f_temp[(1, l)]
-            g[(1, l)] = g_temp[(1, l)]
+            for l in range(2, min(k, (r - 1) * subtree_size(1) + 1) + 1):
+                f[(i, l)] = f_temp[(i, l)]
+                g[(i, l)] = g_temp[(i, l)]
+
+    f[(0, 0)] = 0
+    f[(0, 1)] = 0
+    g[(0, 0)] = [0] * root_count
+    g[(0, 1)] = [0] * root_count
+
+    child_max_size = subtree_size(1) + 1
+
+    print("Virtual root calculation")
+    for r in range(1, root_count + 1):
+        print(f"{'\t' * 1}r: {r} processing root {r}")
+        current_max_l = min(k + 1, r * child_max_size + 1)
+        print(
+            f"{'\t' * 2}Iterating l through {range(1, current_max_l + 1)}"
+        )
+        for l in range(1, current_max_l + 1):
+            capacity_before = 1 + (r - 1) * child_max_size
+            print(f"{'\t' * 3}l: {l}")
+            s_minus = max(0, l - capacity_before)
+            print(f"{'\t' * 4}Calculated s_minus: {s_minus}")
+            s_plus = min(l - 1, child_max_size)
+            print(f"{'\t' * 4}Calculated s_plus: {s_plus}")
+            s_hat = max(
+                range(s_minus, s_plus + 1),
+                key=lambda s: f[(r, s)] + f[(0, l - s)],
+            )
+            print(f"{'\t' * 4}Calculated s_hat: {s_hat}")
+
+            f_temp[(0, l)] = f[(r, s_hat)] + f[0, l - s_hat]
+
+            g_temp[(0, l)] = list(g[(0, l - s_hat)])
+            g_temp[(0, l)][r - 1] = s_hat
+
+        for l in range(1, current_max_l + 1):
+            f[(0, l)] = f_temp[(0, l)]
+            g[(0, l)] = g_temp[(0, l)]
+
+    print("Backtracking the solution")
 
     tau = MathArray([0] * n)
-    tau[1] = 1
     gamma = MathArray([0] * n)
-    gamma[1] = k
 
-    # Coarse to fine pass: Iterate j from root level to max-1
+    virtual_budget = k + 1
+    root_splits = g[(0, virtual_budget)]
+    print(f"Virtual Root splits for total budget {virtual_budget}: {root_splits}")
+
+    for r in range(1, root_count + 1):
+        assigned_budget = root_splits[r - 1]
+
+        if assigned_budget > 0:
+            tau[r] = 1
+            gamma[r] = assigned_budget
+        else:
+            tau[r] = 0
+            gamma[r] = 0
+
     for j in range(max_level):
-        start_node = 1 if j == 0 else d ** (j - 1) + 1
-        # Iterate over the level nodes (incorrect paper pseudocode)
-        # j=0: i in 1
-        # j=1: i in 2
-        # j=2: i in 3..4
-        for i in range(start_node, d**j + 1):
+        print(f"j: {j}")
+
+        if j == 0:
+            start_node = 1
+            end_node = root_count + 1
+        else:
+            start_node = root_count * (d ** (j - 1)) + 1
+            end_node = root_count * (d ** j) + 1
+
+        print(f"Iterating i in {range(start_node, end_node)}")
+        for i in range(start_node, end_node):
             if tau[i] == 1:
-                for r in range(max(1, 2 - j), d + 1):
-                    if g[(i, gamma[i])][r - 1] > 0:
-                        tau[d * (i - 1) + r] = 1
-                        gamma[d * (i - 1) + r] = g[(i, gamma[i])][r - 1]
+                current_budget = gamma[i]
+
+                if (i, current_budget) not in g:
+                    continue
+
+                child_splits = g[(i, current_budget)]
+
+                for r in range(1, d + 1):
+                    budget_for_child = child_splits[r - 1]
+
+                    if budget_for_child > 0:
+                        if j == 0:
+                            # Special mapping for Roots -> Level 1
+                            if r == 2:
+                                child_idx = i + root_count
+                            else:
+                                continue
+                        else:
+                            child_idx = d * (i - 1) + r
+
+                        tau[child_idx] = 1
+                        gamma[child_idx] = budget_for_child
+
+    print("\nCalculating solution\n")
 
     y_hat = MathArray([0] * n)
     for i in range(1, n + 1):
