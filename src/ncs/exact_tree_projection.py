@@ -18,13 +18,14 @@ class MathArray:
 def tree_projection(wt_coeffs: WtCoeffs, k: int) -> WtCoeffs:
     root_count = wt_coeffs.root_count
 
+    k = int(k)
     d = 2
     y = MathArray(wt_coeffs.flat_coeffs)
     n = len(y)
     max_level = wt_coeffs.max_level
 
     def subtree_size(level):
-        return min(int((d ** (max_level + 1 - level) - 1) / (d - 1)), k - level)
+        return int(min((d ** (max_level + 1 - level) - 1) / (d - 1), k - level))
 
     f = {}
     g = {}
