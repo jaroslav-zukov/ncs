@@ -4,7 +4,7 @@ from numpy.testing import assert_allclose, assert_array_equal
 
 from ncs.measurement_module import (
     create_gaussian_operator,
-    create_measurement_operator,
+    create_measurement_operators,
     create_subsampling_operator,
 )
 
@@ -56,20 +56,20 @@ def test_create_gaussian_operator():
 
 def test_create_measurement_operator_validation():
     with pytest.raises(ValueError, match="m must be less than n"):
-        create_measurement_operator("subsampling", n=10, m=10, seed=123)
+        create_measurement_operators("subsampling", n=10, m=10, seed=123)
 
     with pytest.raises(ValueError, match="m must be less than n"):
-        create_measurement_operator("gaussian", n=10, m=15)
+        create_measurement_operators("gaussian", n=10, m=15)
 
     with pytest.raises(
         ValueError, match="Measurement mode invalid_mode is not supported"
     ):
-        create_measurement_operator("invalid_mode", n=10, m=5)
+        create_measurement_operators("invalid_mode", n=10, m=5)
 
 
 def test_create_measurement_operator_passes_correct_operators():
     # Test subsampling operators
-    subsample_op, upsample_op = create_measurement_operator(
+    subsample_op, upsample_op = create_measurement_operators(
         "subsampling", n=10, m=5, seed=123
     )
     signal = np.arange(10)
@@ -80,7 +80,7 @@ def test_create_measurement_operator_passes_correct_operators():
     assert upsampled.shape == (10,)
 
     # Test gaussian operators
-    measure_op, adjoint_op = create_measurement_operator(
+    measure_op, adjoint_op = create_measurement_operators(
         "gaussian", n=10, m=5, seed=123
     )
     measurements = measure_op(signal)

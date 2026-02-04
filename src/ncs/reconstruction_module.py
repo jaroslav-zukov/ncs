@@ -12,40 +12,33 @@ def cosamp_reconstruct(
     y: np.ndarray,
     tree_sparsity: int,
     x_init: WtCoeffs,
-    measurement_op: Callable[[np.ndarray], np.ndarray],
-    adjoint_op: Callable[[np.ndarray], np.ndarray],
+    compressive_sensing_operators,
 ) -> WtCoeffs:
     x_hat = x_init
-    wavelet = x_init.wavelet
     r = np.copy(y)
     iteration_threshold = 20
 
+    (phi, phi_transpose, phi_pseudoinverse) = compressive_sensing_operators
+
     for _ in tqdm(range(iteration_threshold), desc="CoSaMP iterations", disable=True):
-        upsampled_r = adjoint_op(r)
-        e_coeffs = forward_transform(upsampled_r, wavelet)
-        e_double_support = tree_projection(e_coeffs, 2 * tree_sparsity).support
-        x_hat_support = x_hat.support
-
-        t = x_hat_support | e_double_support
-
-        coeffs_estimate = forward_transform(
-            signal=adjoint_op(y), wavelet=wavelet
-        ).on_support(t)
-
-        x_hat = tree_projection(coeffs_estimate, tree_sparsity)
-        r = y - measurement_op(inverse_transform(x_hat))
-        # print(f"Iteration {i}\t Residue Mean: {np.mean(r ** 2):.1f}")
-
+        e = phi_transpose(r)
+        omega_e_double_support = tree_projection(e, 2 * tree_sparsity).support
+        t = x_hat.support | omega_e_double_support
+        b_coeffs_estimate = phi_pseudoinverse(y).on_support(t)
+        x_hat = tree_projection(b_coeffs_estimate, tree_sparsity)
+        r = y - phi(x_hat)
     return x_hat
 
 
-MeasurementFunction = Callable[[np.ndarray], np.ndarray]
-ReconstructionAlgorithm = Callable[
-    [np.ndarray, int, WtCoeffs, MeasurementFunction, MeasurementFunction],
-    WtCoeffs,
-]
+# TODO: Update types
+# MeasurementFunction = Callable[[np.ndarray], np.ndarray]
+# ReconstructionAlgorithm = Callable[
+#     [np.ndarray, int, WtCoeffs, MeasurementFunction, MeasurementFunction],
+#     WtCoeffs,
+# ]
 
-RECONSTRUCTION_ALGORITHMS: dict[str, ReconstructionAlgorithm] = {
+# RECONSTRUCTION_ALGORITHMS: dict[str, ReconstructionAlgorithm] = {
+RECONSTRUCTION_ALGORITHMS = {
     "CoSaMP": cosamp_reconstruct,
 }
 
@@ -55,8 +48,7 @@ def reconstruct(
     y: np.ndarray,
     x_init: WtCoeffs,
     tree_sparsity: int,
-    measurement_op: Callable[[np.ndarray], np.ndarray],
-    adjoint_op: Callable[[np.ndarray], np.ndarray],
+    compressive_sensing_operators,
 ):
     if reconstruction_mode not in RECONSTRUCTION_ALGORITHMS.keys():
         raise ValueError(
@@ -66,7 +58,7 @@ def reconstruct(
     reconstruction_algorithm = RECONSTRUCTION_ALGORITHMS[reconstruction_mode]
 
     x_hat = reconstruction_algorithm(
-        y, tree_sparsity, x_init, measurement_op, adjoint_op
+        y, tree_sparsity, x_init, compressive_sensing_operators
     )
 
     return x_hat
