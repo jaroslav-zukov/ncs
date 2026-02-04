@@ -164,11 +164,11 @@ def generate_sparse_signal_reconstruction_data(
 
 def main():
     print("Gaussian Reconstruction (CoSaMP)")
-    m_values = np.linspace(500, 3000, 20).astype(int)
+    m_values = np.linspace(500, 2500, 20).astype(int)
 
     generate_sparse_signal_reconstruction_data(
-        n=10000,
-        s=500,
+        n=5000,
+        s=250,
         signal_count=2,
         reconstruction_attempts=2,
         m_values=m_values,
