@@ -27,7 +27,7 @@ def support(array):
     return set(np.nonzero(array)[0])
 
 
-def classical_cosamp(phi, y, target_s):
+def tree_cosamp(phi, y, target_s):
     n = phi.shape[1]
     x_hat = np.zeros(n)
     r = y.copy()
@@ -41,7 +41,6 @@ def classical_cosamp(phi, y, target_s):
         t = np.union1d(current_support, omega_e).astype(int)
 
         phi_t = phi[:, t]
-        # what x produces minimal square error with y, when measured
         b_t, _, _, _ = np.linalg.lstsq(phi_t, y, rcond=None)
 
         b = np.zeros(n)
@@ -76,7 +75,7 @@ def generate_sparse_signal_reconstruction_data(
             y = phi @ sparse_signal
 
             for _ in range(reconstruction_attempts):
-                x_hat = classical_cosamp(
+                x_hat = tree_cosamp(
                     phi=phi,
                     y=y,
                     target_s=s,
@@ -165,12 +164,12 @@ def generate_sparse_signal_reconstruction_data(
 
 def main():
     print("Gaussian Reconstruction (CoSaMP)")
-    m_values = np.linspace(20, 150, 20).astype(int)
+    m_values = np.linspace(500, 2500, 20).astype(int)
 
     generate_sparse_signal_reconstruction_data(
-        n=1000,
-        s=10,
-        signal_count=10,
+        n=5000,
+        s=250,
+        signal_count=2,
         reconstruction_attempts=2,
         m_values=m_values,
     )

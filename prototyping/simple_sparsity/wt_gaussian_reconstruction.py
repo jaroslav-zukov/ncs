@@ -3,28 +3,31 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import pywt
 import seaborn as sns
 from matplotlib.offsetbox import AnchoredText
 from tqdm import tqdm
 
+# Single level decomposition
 
-def generate_sparse_x(n, s):
-    signal = np.zeros(n)
+def generate_sparse_z(n, s):
+    coeffs = np.zeros(n)
     indices = np.sort(np.random.choice(n, s, replace=False))
-    # signal[indices] = np.random.random(s) # float from 0 to 1
-    signal[indices] = np.random.randint(-300, 300, size=s) # integer from -300 to 300
+    # coeffs[indices] = np.random.random(s) # float from 0 to 1
+    coeffs[indices] = np.random.randint(-300, 300, size=s) # integer from -300 to 300
+    signal = pywt.idwt(coeffs[:512], coeffs[512:], 'haar')
     return signal
 
-
-def sparse_projection(array, sparsity):
-    result = np.zeros_like(array)
-    indices = np.argsort(np.abs(array))[-sparsity:]
-    result[indices] = array[indices]
+# in wavelet domain
+def sparse_projection(x, sparsity):
+    result = np.zeros_like(x)
+    indices = np.argsort(np.abs(x))[-sparsity:]
+    result[indices] = x[indices]
     return result
 
 
-def support(array):
-    return set(np.nonzero(array)[0])
+def support(x):
+    return set(np.nonzero(x)[0])
 
 
 def classical_cosamp(phi, y, target_s):
@@ -41,13 +44,12 @@ def classical_cosamp(phi, y, target_s):
         t = np.union1d(current_support, omega_e).astype(int)
 
         phi_t = phi[:, t]
-        # what x produces minimal square error with y, when measured
         b_t, _, _, _ = np.linalg.lstsq(phi_t, y, rcond=None)
 
         b = np.zeros(n)
         b[t] = b_t
 
-        x_hat = sparse_projection(array=b, sparsity=target_s)
+        x_hat = sparse_projection(x=b, sparsity=target_s)
 
         r = y - (phi @ x_hat)
 
@@ -68,11 +70,18 @@ def generate_sparse_signal_reconstruction_data(
 
     for m in tqdm(m_values, desc="Measuring and reconstructing"):
         for _ in range(signal_count):
-            sparse_signal = generate_sparse_x(n, s)
+            raw_signal = generate_sparse_z(n, s)
 
             rng = np.random.default_rng()
             phi = rng.normal(0, 1 / np.sqrt(m), size=(m, n))
 
+            (cA, cD) = pywt.dwt(raw_signal, wavelet='haar')
+
+            sparse_signal = []
+            sparse_signal.extend(cA)
+            sparse_signal.extend(cD)
+
+            # print(len(sparse_signal))
             y = phi @ sparse_signal
 
             for _ in range(reconstruction_attempts):
@@ -157,21 +166,21 @@ def generate_sparse_signal_reconstruction_data(
     plt.tight_layout()
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-    filename = f"figures/sparse_gaussian_reconstruction_{timestamp}.png"
+    filename = f"figures/wt_sparse_gaussian_reconstruction_{timestamp}.png"
     plt.savefig(filename, dpi=300)
     print(f"Saved plot to {filename}")
     plt.show()
 
 
 def main():
-    print("Gaussian Reconstruction (CoSaMP)")
-    m_values = np.linspace(20, 150, 20).astype(int)
+    print("WT Gaussian Reconstruction (CoSaMP)")
+    m_values = np.linspace(1, 150, 20).astype(int)
 
     generate_sparse_signal_reconstruction_data(
-        n=1000,
+        n=1024,
         s=10,
-        signal_count=10,
-        reconstruction_attempts=2,
+        signal_count=1,
+        reconstruction_attempts=1,
         m_values=m_values,
     )
 
