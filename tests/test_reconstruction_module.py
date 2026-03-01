@@ -17,8 +17,7 @@ def test_reconstruction_validation(mocker):
             y=np.array([1, 2, 3]),
             x_init=mocker.Mock(spec=WtCoeffs),
             tree_sparsity=1,
-            measurement_op=lambda x: x,
-            adjoint_op=lambda x: x,
+            compressive_sensing_operators=(lambda x: x, lambda x: x, lambda x: x),
         )
 
 
@@ -37,18 +36,19 @@ def test_reconstruction_calls_algorithm(mocker):
     tree_sparsity = 1
     measurement_op = lambda x: x
     adjoint_op = lambda x: x
+    pseudo_inverse_op = lambda x: x
+    compressive_sensing_operators = (measurement_op, adjoint_op, pseudo_inverse_op)
 
     result = reconstruct(
         reconstruction_mode="CoSaMP",
         y=y,
         x_init=x_init,
         tree_sparsity=tree_sparsity,
-        measurement_op=measurement_op,
-        adjoint_op=adjoint_op,
+        compressive_sensing_operators=compressive_sensing_operators,
     )
 
     mock_algorithm.assert_called_once_with(
-        y, tree_sparsity, x_init, measurement_op, adjoint_op
+        y, tree_sparsity, x_init, compressive_sensing_operators
     )
 
     assert result == "reconstructed_result"
@@ -67,7 +67,7 @@ def test_cosamp_reconstruct_integration():
 
     x_hat = measure_and_reconstruct(
         measurement_mode="gaussian",
-        m=10,
+        m=100,
         reconstruction_mode="CoSaMP",
         coeffs_x=sparse_coeff,
         target_tree_sparsity=tree_sparsity,

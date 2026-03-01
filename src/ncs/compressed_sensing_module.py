@@ -21,9 +21,22 @@ def measure_and_reconstruct(
     )
 
     if measurement_mode == 'gaussian':
-        y = measurement_op(coeffs_x)
-        # Gaussian operator works directly in wavelet coefficient domain
-        compressive_sensing_operators = (measurement_op, adjoint_op, pseudo_inverse)
+        y = measurement_op(inverse_transform(coeffs_x))
+        # For Gaussian, compose the operator with the wavelet transform so that
+        # CoSaMP works in the wavelet coefficient domain:
+        #   phi(wt_coeffs)   = Φ · IDWT(wt_coeffs)
+        #   phi_T(y)         = DWT · Φᵀ · y
+        #   phi_pinv(y)      = DWT · Φ† · y
+        def phi(wt_coeffs: WtCoeffs) -> np.ndarray:
+            return measurement_op(inverse_transform(wt_coeffs))
+
+        def phi_transpose(meas: np.ndarray) -> WtCoeffs:
+            return forward_transform(adjoint_op(meas), coeffs_x.wavelet)
+
+        def phi_pseudoinverse(meas: np.ndarray) -> WtCoeffs:
+            return forward_transform(pseudo_inverse(meas), coeffs_x.wavelet)
+
+        compressive_sensing_operators = (phi, phi_transpose, phi_pseudoinverse)
     elif measurement_mode == 'subsampling':
         y = measurement_op(inverse_transform(coeffs_x))
         # For subsampling, the raw operators act in the time domain.
