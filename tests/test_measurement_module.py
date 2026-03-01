@@ -3,6 +3,7 @@ import pytest
 from numpy.testing import assert_allclose, assert_array_equal
 
 from ncs.measurement_module import (
+    create_fourier_subsampling_operator,
     create_gaussian_operator,
     create_measurement_operators,
     create_subsampling_operator,
@@ -89,3 +90,80 @@ def test_create_measurement_operator_passes_correct_operators():
 
     reconstructed = adjoint_op(measurements)
     assert reconstructed.shape == (10,)
+
+
+def test_fourier_subsampling_operator_shape():
+    n, m = 64, 20
+    measure_op, adjoint_op, pseudo_inverse_op = create_fourier_subsampling_operator(n, m, seed=42)
+
+    signal = np.random.default_rng(0).standard_normal(n)
+    y = measure_op(signal)
+
+    # Forward op: R^n → C^m
+    assert y.shape == (m,)
+    assert np.iscomplexobj(y)
+
+    # Adjoint op: C^m → R^n
+    x_adj = adjoint_op(y)
+    assert x_adj.shape == (n,)
+    assert np.isrealobj(x_adj)
+
+    # Pseudo-inverse op: C^m → R^n
+    x_pinv = pseudo_inverse_op(y)
+    assert x_pinv.shape == (n,)
+
+
+def test_fourier_subsampling_adjoint_correctness():
+    """Verify the adjoint property for Phi: R^n to C^m.
+
+    The real-valued adjoint Phi^T: C^m to R^n satisfies:
+        Re(<Phi x, y>_C) = <x, Phi^T y>_R
+    i.e. Re(sum_i (Phi x)_i * conj(y_i)) = sum_j x_j * (Phi^T y)_j
+    """
+    n, m = 128, 40
+    measure_op, adjoint_op, _ = create_fourier_subsampling_operator(n, m, seed=7)
+
+    rng = np.random.default_rng(99)
+    x = rng.standard_normal(n)
+    y = rng.standard_normal(m) + 1j * rng.standard_normal(m)
+
+    # Re(<Phi x, y>_C) = Re(sum_i (Phi x)[i] * conj(y[i]))
+    left_side = np.real(np.dot(measure_op(x), np.conj(y)))
+
+    # <x, Phi^T y>_R  (adjoint_op returns a real array)
+    right_side = np.dot(x, adjoint_op(y))
+
+    assert_allclose(left_side, right_side, rtol=1e-10)
+
+
+def test_fourier_subsampling_unitary_pseudoinverse():
+    """Verify adjoint == pseudo_inverse (consequence of unitary rfft with norm='ortho')."""
+    n, m = 64, 15
+    _, adjoint_op, pseudo_inverse_op = create_fourier_subsampling_operator(n, m, seed=13)
+
+    rng = np.random.default_rng(55)
+    y = rng.standard_normal(m) + 1j * rng.standard_normal(m)
+
+    assert_allclose(adjoint_op(y), pseudo_inverse_op(y), rtol=1e-12)
+
+
+def test_fourier_subsampling_m_too_large_raises():
+    """Raise ValueError when m exceeds n//2+1 unique rfft frequencies."""
+    n = 32
+    n_freqs = n // 2 + 1  # = 17
+    with pytest.raises(ValueError, match="exceeds number of unique frequencies"):
+        create_fourier_subsampling_operator(n, m=n_freqs + 1)
+
+
+def test_create_measurement_operators_fourier_subsampling():
+    n, m = 64, 20
+    measure_op, adjoint_op, pseudo_inverse_op = create_measurement_operators(
+        "fourier_subsampling", n=n, m=m, seed=42
+    )
+    signal = np.random.default_rng(0).standard_normal(n)
+    y = measure_op(signal)
+    assert y.shape == (m,)
+    assert np.iscomplexobj(y)
+
+    x_adj = adjoint_op(y)
+    assert x_adj.shape == (n,)

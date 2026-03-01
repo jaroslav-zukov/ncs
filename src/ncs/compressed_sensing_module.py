@@ -44,6 +44,27 @@ def measure_and_reconstruct(
             return forward_transform(pseudo_inverse(y), coeffs_x.wavelet)
 
         compressive_sensing_operators = (phi, phi_transpose, phi_pseudoinverse)
+    elif measurement_mode == 'fourier_subsampling':
+        y = measurement_op(inverse_transform(coeffs_x))
+        # For Fourier subsampling, the raw operators act in the frequency domain.
+        # CoSaMP works in wavelet coefficient domain, so we compose the operators:
+        #   phi(wt_coeffs)   = S · DFT · IDWT(wt_coeffs)
+        #   phi_T(y)         = DWT · DFT^T · S^T(y)   (real adjoint of subsampled rfft)
+        #   phi_pinv(y)      = same as phi_T (DFT is unitary with ortho norm)
+        # This composition is incoherent with the wavelet basis, providing RIP
+        # guarantees for wavelet-sparse signals (Candès et al., 2006).
+        def phi(wt_coeffs: WtCoeffs) -> np.ndarray:
+            return measurement_op(inverse_transform(wt_coeffs))
+
+        def phi_transpose(meas: np.ndarray) -> WtCoeffs:
+            time_signal = adjoint_op(meas)
+            return forward_transform(time_signal, coeffs_x.wavelet)
+
+        def phi_pseudoinverse(meas: np.ndarray) -> WtCoeffs:
+            time_signal = pseudo_inverse(meas)
+            return forward_transform(time_signal, coeffs_x.wavelet)
+
+        compressive_sensing_operators = (phi, phi_transpose, phi_pseudoinverse)
     else:
         raise ValueError(f"Unknown measurement mode: {measurement_mode}")
 
