@@ -2,7 +2,7 @@ import numpy as np
 
 from ncs.measurement_module import create_measurement_operators
 from ncs.reconstruction_module import reconstruct
-from ncs.wavelet_module import inverse_transform
+from ncs.wavelet_module import forward_transform, inverse_transform
 from ncs.wt_coeffs import WtCoeffs
 
 
@@ -22,11 +22,30 @@ def measure_and_reconstruct(
 
     if measurement_mode == 'gaussian':
         y = measurement_op(coeffs_x)
+        # Gaussian operator works directly in wavelet coefficient domain
+        compressive_sensing_operators = (measurement_op, adjoint_op, pseudo_inverse)
     elif measurement_mode == 'subsampling':
         y = measurement_op(inverse_transform(coeffs_x))
+        # For subsampling, the raw operators act in the time domain.
+        # CoSaMP works in wavelet coefficient domain, so we compose the operators:
+        #   phi(wt_coeffs)       = subsample(IDWT(wt_coeffs))
+        #   phi_T(y)             = DWT(upsample(y))
+        #   phi_pinv(y)          = DWT(pseudo_inverse_subsample(y))
+        # TODO: The pseudo-inverse of the composed operator (S ∘ IDWT) is NOT simply
+        #   DWT ∘ S†. A proper least-squares pseudo-inverse may be needed for
+        #   CoSaMP convergence guarantees, especially for the subsampling case.
+        def phi(wt_coeffs: WtCoeffs) -> np.ndarray:
+            return measurement_op(inverse_transform(wt_coeffs))
+
+        def phi_transpose(y: np.ndarray) -> WtCoeffs:
+            return forward_transform(adjoint_op(y), coeffs_x.wavelet)
+
+        def phi_pseudoinverse(y: np.ndarray) -> WtCoeffs:
+            return forward_transform(pseudo_inverse(y), coeffs_x.wavelet)
+
+        compressive_sensing_operators = (phi, phi_transpose, phi_pseudoinverse)
     else:
         raise ValueError(f"Unknown measurement mode: {measurement_mode}")
-
 
     x_init = WtCoeffs.from_flat_coeffs(
         flat_coeffs=np.zeros(n),
@@ -35,17 +54,12 @@ def measure_and_reconstruct(
         wavelet=coeffs_x.wavelet,
     )
 
-
-
-    compressive_sensing_operators = ()
-
     x_hat = reconstruct(
         reconstruction_mode=reconstruction_mode,
         y=y,
         x_init=x_init,
         tree_sparsity=target_tree_sparsity,
-        measurement_op=measurement_op,
-        adjoint_op=adjoint_op,
+        compressive_sensing_operators=compressive_sensing_operators,
     )
 
     return x_hat
