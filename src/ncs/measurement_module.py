@@ -95,19 +95,14 @@ def create_subsampling_operator(n: int, m: int, seed: int = None):
     indices = np.sort(rng.choice(n, size=m, replace=False))
 
     def subsample(signal: np.ndarray) -> np.ndarray:
-        return signal[indices] * np.sqrt(n / m)
+        return signal[indices]
 
     def transposed(measurements: np.ndarray) -> np.ndarray:
         upsampled = np.zeros(n)
         upsampled[indices] = measurements
-        return upsampled * np.sqrt(n / m)
+        return upsampled
 
-    def pseudo_inverse(measurements: np.ndarray) -> np.ndarray:
-        upsampled = np.zeros(n)
-        upsampled[indices] = measurements
-        return upsampled * np.sqrt(m / n)
-
-    return subsample, transposed, pseudo_inverse
+    return subsample, transposed
 
 
 def create_gaussian_operator(n: int, m: int, seed: int = None):
@@ -156,7 +151,7 @@ def create_gaussian_operator(n: int, m: int, seed: int = None):
     def pseudo_inverse(measurements: np.ndarray) -> np.ndarray:
         return phi_pinv @ measurements
 
-    return measure, adjoint, pseudo_inverse
+    return measure, adjoint
 
 
 # MeasurementFunction = Callable[[np.ndarray], np.ndarray]
@@ -194,7 +189,7 @@ def create_measurement_operators(
         seed: Optional random seed forwarded to the chosen factory.
 
     Returns:
-        Tuple (measure, adjoint, pseudo_inverse) as returned by the selected
+        Tuple (measure, adjoint) as returned by the selected
         factory.  See individual factory docstrings for semantics.
 
     Raises:
@@ -211,3 +206,6 @@ def create_measurement_operators(
 
     measurement_operators = MEASUREMENT_OPERATORS[measurement_mode]
     return measurement_operators(n, m, seed)
+
+
+create_measurement_operator = create_measurement_operators

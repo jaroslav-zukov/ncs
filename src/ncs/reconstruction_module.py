@@ -52,7 +52,8 @@ def cosamp_reconstruct(
     y: np.ndarray,
     tree_sparsity: int,
     x_init: WtCoeffs,
-    compressive_sensing_operators,
+    measurement_op,
+    adjoint_op,
 ) -> WtCoeffs:
     """
     Reconstruct a tree-sparse wavelet signal from compressed measurements.
@@ -78,10 +79,9 @@ def cosamp_reconstruct(
        Merge the identified support with the current estimate's support to
        form an extended candidate support.
 
-    4. **Least squares on T**  b = Φ†(y) restricted to T
-       Compute the least-squares signal estimate b on the merged support T
-       by applying the pseudo-inverse of Φ and zeroing out coordinates
-       outside T.
+    4. **Least squares on T**  b = Φᵀ(y) restricted to T
+       Compute the signal estimate b on the merged support T by applying
+       the adjoint of Φ and zeroing out coordinates outside T.
 
     5. **Prune to tree-k-sparse** x̂ = P_tree(b, k)
        Project b onto the tree-k-sparse model (exact tree projection) to
@@ -98,11 +98,11 @@ def cosamp_reconstruct(
         x_init: Initial wavelet coefficient estimate (usually all zeros).
             Determines the wavelet basis, decomposition level, and root
             count used throughout.
-        compressive_sensing_operators: Tuple (phi, phi_transpose,
-            phi_pseudoinverse) where:
-              phi(wt_coeffs) → y             forward measurement
-              phi_transpose(y) → WtCoeffs    adjoint
-              phi_pseudoinverse(y) → WtCoeffs  least-squares pseudo-inverse
+        measurement_op: Forward measurement operator, maps flat coefficient
+            array of length n to measurement vector of length m.
+        adjoint_op: Adjoint (transpose) of the measurement operator, maps
+            measurement vector of length m to flat coefficient array of
+            length n.
 
     Returns:
         WtCoeffs: Estimated wavelet coefficient vector x̂ after 20 iterations.
@@ -110,16 +110,29 @@ def cosamp_reconstruct(
     x_hat = x_init
     r = np.copy(y)
     iteration_threshold = 20
-
-    (phi, phi_transpose, phi_pseudoinverse) = compressive_sensing_operators
+    n = len(x_init.flat_coeffs)
 
     for _ in tqdm(range(iteration_threshold), desc="CoSaMP iterations", disable=True):
-        e = phi_transpose(r)
+        e = WtCoeffs.from_flat_coeffs(
+            adjoint_op(r), x_init.root_count, x_init.max_level, x_init.wavelet
+        )
         omega_e_double_support = tree_projection(e, 2 * tree_sparsity).support
         t = x_hat.support | omega_e_double_support
-        b_coeffs_estimate = phi_pseudoinverse(y).on_support(t)
+        # Least-squares on support T: build restricted matrix by probing basis vectors
+        t_list = sorted(t)
+        I = np.eye(n)
+        phi_t = np.column_stack([
+            measurement_op(I[i]) for i in t_list
+        ]) if t_list else np.zeros((len(y), 0))
+        x_t = np.linalg.lstsq(phi_t, y, rcond=None)[0]
+        b_flat = np.zeros(n)
+        for j, i in enumerate(t_list):
+            b_flat[i] = x_t[j]
+        b_coeffs_estimate = WtCoeffs.from_flat_coeffs(
+            b_flat, x_init.root_count, x_init.max_level, x_init.wavelet
+        )
         x_hat = tree_projection(b_coeffs_estimate, tree_sparsity)
-        r = y - phi(x_hat)
+        r = y - measurement_op(x_hat.flat_coeffs)
     return x_hat
 
 
@@ -141,7 +154,8 @@ def reconstruct(
     y: np.ndarray,
     x_init: WtCoeffs,
     tree_sparsity: int,
-    compressive_sensing_operators,
+    measurement_op,
+    adjoint_op,
 ):
     """
     Dispatcher: run a named reconstruction algorithm.
@@ -154,8 +168,8 @@ def reconstruct(
         y: Measurement vector of shape (m,).
         x_init: Initial wavelet coefficient estimate (typically zero).
         tree_sparsity: Target tree-sparsity level k passed to the algorithm.
-        compressive_sensing_operators: Tuple (phi, phi_transpose,
-            phi_pseudoinverse) as required by the chosen algorithm.
+        measurement_op: Forward measurement operator (flat coeffs → measurements).
+        adjoint_op: Adjoint measurement operator (measurements → flat coeffs).
 
     Returns:
         WtCoeffs: Recovered wavelet coefficient estimate x̂.
@@ -171,7 +185,7 @@ def reconstruct(
     reconstruction_algorithm = RECONSTRUCTION_ALGORITHMS[reconstruction_mode]
 
     x_hat = reconstruction_algorithm(
-        y, tree_sparsity, x_init, compressive_sensing_operators
+        y, tree_sparsity, x_init, measurement_op, adjoint_op
     )
 
     return x_hat

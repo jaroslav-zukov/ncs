@@ -42,7 +42,7 @@ reconstruction.
 
 import numpy as np
 
-from ncs.measurement_module import create_measurement_operators
+from ncs.measurement_module import create_measurement_operator
 from ncs.reconstruction_module import reconstruct
 from ncs.wavelet_module import forward_transform, inverse_transform
 from ncs.wt_coeffs import WtCoeffs
@@ -98,34 +98,27 @@ def measure_and_reconstruct(
     """
     n = coeffs_x.n
 
-    measurement_op, adjoint_op, pseudo_inverse = create_measurement_operators(
+    measurement_op, adjoint_op = create_measurement_operator(
         measurement_mode, n, m, seed
     )
 
     if measurement_mode == 'gaussian':
-        y = measurement_op(coeffs_x)
-        # Gaussian operator works directly in wavelet coefficient domain
-        compressive_sensing_operators = (measurement_op, adjoint_op, pseudo_inverse)
+        y = measurement_op(coeffs_x.flat_coeffs)
     elif measurement_mode == 'subsampling':
         y = measurement_op(inverse_transform(coeffs_x))
-        # For subsampling, the raw operators act in the time domain.
-        # CoSaMP works in wavelet coefficient domain, so we compose the operators:
-        #   phi(wt_coeffs)       = subsample(IDWT(wt_coeffs))
-        #   phi_T(y)             = DWT(upsample(y))
-        #   phi_pinv(y)          = DWT(pseudo_inverse_subsample(y))
-        # TODO: The pseudo-inverse of the composed operator (S ∘ IDWT) is NOT simply
-        #   DWT ∘ S†. A proper least-squares pseudo-inverse may be needed for
-        #   CoSaMP convergence guarantees, especially for the subsampling case.
-        def phi(wt_coeffs: WtCoeffs) -> np.ndarray:
-            return measurement_op(inverse_transform(wt_coeffs))
+        raw_measurement_op = measurement_op
+        raw_adjoint_op = adjoint_op
 
-        def phi_transpose(y: np.ndarray) -> WtCoeffs:
-            return forward_transform(adjoint_op(y), coeffs_x.wavelet)
+        def composed_measurement_op(wt_flat: np.ndarray) -> np.ndarray:
+            return raw_measurement_op(inverse_transform(
+                WtCoeffs.from_flat_coeffs(wt_flat, coeffs_x.root_count, coeffs_x.max_level, coeffs_x.wavelet)
+            ))
 
-        def phi_pseudoinverse(y: np.ndarray) -> WtCoeffs:
-            return forward_transform(pseudo_inverse(y), coeffs_x.wavelet)
+        def composed_adjoint_op(y_: np.ndarray) -> np.ndarray:
+            return forward_transform(raw_adjoint_op(y_), coeffs_x.wavelet).flat_coeffs
 
-        compressive_sensing_operators = (phi, phi_transpose, phi_pseudoinverse)
+        measurement_op = composed_measurement_op
+        adjoint_op = composed_adjoint_op
     else:
         raise ValueError(f"Unknown measurement mode: {measurement_mode}")
 
@@ -141,7 +134,8 @@ def measure_and_reconstruct(
         y=y,
         x_init=x_init,
         tree_sparsity=target_tree_sparsity,
-        compressive_sensing_operators=compressive_sensing_operators,
+        measurement_op=measurement_op,
+        adjoint_op=adjoint_op,
     )
 
     return x_hat
