@@ -106,7 +106,7 @@ def measure_and_reconstruct(
         y = measurement_op(coeffs_x)
         # Gaussian operator works directly in wavelet coefficient domain
         compressive_sensing_operators = (measurement_op, adjoint_op, pseudo_inverse)
-    elif measurement_mode == 'subsampling':
+    elif measurement_mode in ('subsampling', 'random_modulation'):
         y = measurement_op(inverse_transform(coeffs_x))
         # For subsampling, the raw operators act in the time domain.
         # CoSaMP works in wavelet coefficient domain, so we compose the operators:
