@@ -93,16 +93,22 @@ def create_subsampling_operator(n: int, m: int, seed: int = None):
     """
     rng = np.random.default_rng(seed)
     indices = np.sort(rng.choice(n, size=m, replace=False))
+    scale = np.sqrt(n / m)
 
     def subsample(signal: np.ndarray) -> np.ndarray:
-        return signal[indices]
+        return signal[indices] * scale
 
     def transposed(measurements: np.ndarray) -> np.ndarray:
         upsampled = np.zeros(n)
         upsampled[indices] = measurements
-        return upsampled
+        return upsampled * scale
 
-    return subsample, transposed
+    def pseudo_inverse(measurements: np.ndarray) -> np.ndarray:
+        upsampled = np.zeros(n)
+        upsampled[indices] = measurements
+        return upsampled / scale
+
+    return subsample, transposed, pseudo_inverse
 
 
 def create_gaussian_operator(n: int, m: int, seed: int = None):
@@ -146,7 +152,12 @@ def create_gaussian_operator(n: int, m: int, seed: int = None):
     def adjoint(measurements: np.ndarray) -> np.ndarray:
         return phi.T @ measurements
 
-    return measure, adjoint
+    phi_pinv = np.linalg.pinv(phi)
+
+    def pseudo_inverse(measurements: np.ndarray) -> np.ndarray:
+        return phi_pinv @ measurements
+
+    return measure, adjoint, pseudo_inverse
 
 
 def _create_gaussian_operator_with_pinv(n: int, m: int, seed: int = None):
