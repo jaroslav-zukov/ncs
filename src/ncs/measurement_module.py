@@ -236,10 +236,76 @@ def create_fourier_subsampling_operator(n: int, m: int, seed: int = None):
 # ]
 
 # MEASUREMENT_OPERATORS: dict[str, MeasurementOperators] = {
+def create_random_modulation_operator(n: int, m: int, seed: int = None):
+    """
+    Creates a random modulation + subsampling measurement operator.
+
+    Implements Option B / the "random demodulator" (Tropp et al., 2010):
+        y = S · (r ⊙ x)
+    where r ∈ {±1}^n is a random Rademacher chipping sequence and S
+    selects m random time-domain indices.
+
+    WHY THIS WORKS: Plain time-domain subsampling is coherent with the wavelet
+    basis (wavelets are time-localized → subsampling can miss entire wavelet
+    supports). Multiplying by a ±1 chipping sequence spreads signal energy
+    uniformly across all frequencies, making subsequent time-domain subsampling
+    equivalent to random Fourier sampling — which IS incoherent with wavelets
+    and satisfies RIP (Candès et al., 2006).
+
+    PHYSICAL INTERPRETATION: For ONT, the chipping sequence r could be applied
+    as a known voltage modulation pattern before the ADC, making this approach
+    physically implementable without hardware frequency-domain access.
+
+    ADVANTAGE OVER OPTION A (Fourier subsampling): Measurements are real-valued.
+    No complex arithmetic needed. Slightly simpler reconstruction.
+
+    References:
+        Tropp, Laska, Duarte, Romberg, Baraniuk (2010). Beyond Nyquist.
+        Candès, Romberg, Tao (2006). Robust uncertainty principles.
+
+    Args:
+        n: Signal length
+        m: Number of measurements (time-domain samples after modulation)
+        seed: Random seed for reproducibility
+
+    Returns:
+        Tuple of (measure, adjoint, pseudo_inverse) callables
+    """
+    rng = np.random.default_rng(seed)
+    # Rademacher chipping sequence: random ±1
+    chipping = rng.choice([-1.0, 1.0], size=n)
+    # Random subsampling indices (after modulation)
+    indices = np.sort(rng.choice(n, size=m, replace=False))
+    scale = np.sqrt(n / m)
+
+    def measure(signal: np.ndarray) -> np.ndarray:
+        """y = S · (r ⊙ x): modulate then subsample."""
+        modulated = chipping * signal
+        return modulated[indices] * scale
+
+    def adjoint(measurements: np.ndarray) -> np.ndarray:
+        """phi^T(y) = r ⊙ S^T(y): upsample then demodulate.
+        Since r ∈ {±1}, r^{-1} = r, so demodulation = modulation."""
+        upsampled = np.zeros(n)
+        upsampled[indices] = measurements * scale
+        return chipping * upsampled
+
+    def pseudo_inverse(measurements: np.ndarray) -> np.ndarray:
+        """Approximate pseudo-inverse (same as adjoint scaled by m/n).
+        Note: not exact — a proper least-squares solve would be needed
+        for exact inversion, but adjoint suffices for CoSaMP's proxy step."""
+        upsampled = np.zeros(n)
+        upsampled[indices] = measurements / scale
+        return chipping * upsampled
+
+    return measure, adjoint, pseudo_inverse
+
+
 MEASUREMENT_OPERATORS = {
     "subsampling": create_subsampling_operator,
     "gaussian": create_gaussian_operator,
     "fourier_subsampling": create_fourier_subsampling_operator,
+    "random_modulation": create_random_modulation_operator,
 }
 
 

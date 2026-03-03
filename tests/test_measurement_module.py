@@ -6,6 +6,7 @@ from ncs.measurement_module import (
     create_fourier_subsampling_operator,
     create_gaussian_operator,
     create_measurement_operators,
+    create_random_modulation_operator,
     create_subsampling_operator,
 )
 
@@ -90,6 +91,43 @@ def test_create_measurement_operator_passes_correct_operators():
 
     reconstructed = adjoint_op(measurements)
     assert reconstructed.shape == (10,)
+
+
+def test_random_modulation_operator_shape():
+    n, m = 64, 20
+    measure_op, adjoint_op, pinv_op = create_random_modulation_operator(n, m, seed=42)
+
+    signal = np.random.default_rng(0).standard_normal(n)
+    y = np.random.default_rng(1).standard_normal(m)
+
+    assert measure_op(signal).shape == (m,)
+    assert adjoint_op(y).shape == (n,)
+    assert pinv_op(y).shape == (n,)
+
+
+def test_random_modulation_adjoint_correctness():
+    """Verify ⟨Φx, y⟩ = ⟨x, Φᵀy⟩ for random vectors."""
+    n, m = 64, 20
+    measure_op, adjoint_op, _ = create_random_modulation_operator(n, m, seed=99)
+
+    rng = np.random.default_rng(7)
+    x = rng.standard_normal(n)
+    y = rng.standard_normal(m)
+
+    left = np.dot(measure_op(x), y)
+    right = np.dot(x, adjoint_op(y))
+
+    assert_allclose(left, right, rtol=1e-10)
+
+
+def test_random_modulation_chipping_deterministic():
+    """Same seed must produce identical measurements."""
+    n, m = 32, 10
+    measure1, _, _ = create_random_modulation_operator(n, m, seed=123)
+    measure2, _, _ = create_random_modulation_operator(n, m, seed=123)
+
+    signal = np.arange(n, dtype=float)
+    assert_allclose(measure1(signal), measure2(signal))
 
 
 def test_fourier_subsampling_operator_shape():
