@@ -12,30 +12,32 @@ from ncs.measurement_module import (
 
 
 def test_create_subsampling_operator():
-    subsample_op, upsample_op = create_subsampling_operator(10, 5, 123)
+    subsample_op, upsample_op, pseudo_inverse_op = create_subsampling_operator(10, 5, 123)
 
-    subsampled_signal = subsample_op(np.arange(10))
-    assert_array_equal(subsampled_signal, [0, 4, 7, 8, 9])
+    subsampled_signal = subsample_op(np.arange(10, dtype=float))
+    # Values at selected indices scaled by sqrt(n/m) = sqrt(2)
+    assert_allclose(subsampled_signal, np.array([0, 4, 7, 8, 9]) * np.sqrt(10 / 5))
 
     upsampled_signal = upsample_op([1, 2, 3, 4, 5])
-    assert_array_equal(upsampled_signal, [1, 0, 0, 0, 2, 0, 0, 3, 4, 5])
+    # Scattered values scaled by sqrt(n/m) = sqrt(2)
+    assert_allclose(upsampled_signal, np.array([1, 0, 0, 0, 2, 0, 0, 3, 4, 5]) * np.sqrt(10 / 5))
 
-    # Verifying ops are pseudoinverse
-    up_subsampled_signal = subsample_op(upsample_op([1, 2, 3, 4, 5]))
-    assert_array_equal(up_subsampled_signal, [1, 2, 3, 4, 5])
+    # Verifying subsample ∘ pseudo_inverse = I
+    up_subsampled_signal = subsample_op(pseudo_inverse_op([1, 2, 3, 4, 5]))
+    assert_allclose(up_subsampled_signal, [1, 2, 3, 4, 5])
 
     # Verify adjoint property: <Ax, y> = <x, A^T y>
     # For any vectors x and y holds:
     # measurement_op(x) · y == x · adjoint_op(y)
-    signal = np.arange(10)
-    y = np.array([1, 2, 3, 4, 5])
+    signal = np.arange(10, dtype=float)
+    y = np.array([1, 2, 3, 4, 5], dtype=float)
     left_side = np.dot(subsample_op(signal), y)
     right_side = np.dot(signal, upsample_op(y))
-    assert_array_equal(left_side, right_side)
+    assert_allclose(left_side, right_side)
 
 
 def test_create_gaussian_operator():
-    measure_op, adjoint_op = create_gaussian_operator(10, 5, 123)
+    measure_op, adjoint_op, _ = create_gaussian_operator(10, 5, 123)
 
     signal = np.arange(10)
     measurement = measure_op(signal)
@@ -71,18 +73,19 @@ def test_create_measurement_operator_validation():
 
 def test_create_measurement_operator_passes_correct_operators():
     # Test subsampling operators
-    subsample_op, upsample_op = create_measurement_operators(
+    subsample_op, upsample_op, _ = create_measurement_operators(
         "subsampling", n=10, m=5, seed=123
     )
-    signal = np.arange(10)
+    signal = np.arange(10, dtype=float)
     subsampled = subsample_op(signal)
-    assert_array_equal(subsampled, [0, 4, 7, 8, 9])
+    # Values at selected indices scaled by sqrt(n/m) = sqrt(2)
+    assert_allclose(subsampled, np.array([0, 4, 7, 8, 9]) * np.sqrt(10 / 5))
 
     upsampled = upsample_op(subsampled)
     assert upsampled.shape == (10,)
 
     # Test gaussian operators
-    measure_op, adjoint_op = create_measurement_operators(
+    measure_op, adjoint_op, _ = create_measurement_operators(
         "gaussian", n=10, m=5, seed=123
     )
     measurements = measure_op(signal)
