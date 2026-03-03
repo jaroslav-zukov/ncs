@@ -95,19 +95,14 @@ def create_subsampling_operator(n: int, m: int, seed: int = None):
     indices = np.sort(rng.choice(n, size=m, replace=False))
 
     def subsample(signal: np.ndarray) -> np.ndarray:
-        return signal[indices] * np.sqrt(n / m)
+        return signal[indices]
 
     def transposed(measurements: np.ndarray) -> np.ndarray:
         upsampled = np.zeros(n)
         upsampled[indices] = measurements
-        return upsampled * np.sqrt(n / m)
+        return upsampled
 
-    def pseudo_inverse(measurements: np.ndarray) -> np.ndarray:
-        upsampled = np.zeros(n)
-        upsampled[indices] = measurements
-        return upsampled * np.sqrt(m / n)
-
-    return subsample, transposed, pseudo_inverse
+    return subsample, transposed
 
 
 def create_gaussian_operator(n: int, m: int, seed: int = None):
@@ -143,6 +138,18 @@ def create_gaussian_operator(n: int, m: int, seed: int = None):
         pseudo_inverse(measurements) → np.ndarray of shape (n,)
             Φ†·y = (ΦᵀΦ)⁻¹Φᵀ·y, least-squares solution to Φz = y.
     """
+    rng = np.random.default_rng(seed)
+    phi = rng.normal(0, 1.0 / np.sqrt(m), size=(m, n))
+    def measure(signal: np.ndarray) -> np.ndarray:
+        return phi @ signal
+
+    def adjoint(measurements: np.ndarray) -> np.ndarray:
+        return phi.T @ measurements
+
+    return measure, adjoint
+
+
+def _create_gaussian_operator_with_pinv(n: int, m: int, seed: int = None):
     rng = np.random.default_rng(seed)
     phi = rng.normal(0, 1.0 / np.sqrt(m), size=(m, n))
     phi_pinv = np.linalg.pinv(phi)
@@ -357,3 +364,21 @@ def create_measurement_operators(
 
     measurement_operators = MEASUREMENT_OPERATORS[measurement_mode]
     return measurement_operators(n, m, seed)
+
+
+def create_measurement_operator(
+    measurement_mode: str,
+    n: int,
+    m: int,
+    seed: int | None = None,
+):
+    """Compatibility wrapper that always returns (measure, adjoint, pseudo_inverse)."""
+    if measurement_mode == "gaussian":
+        return _create_gaussian_operator_with_pinv(n, m, seed)
+
+    operators = create_measurement_operators(measurement_mode, n, m, seed)
+    if len(operators) == 3:
+        return operators
+
+    measure, adjoint = operators
+    return measure, adjoint, adjoint

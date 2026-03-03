@@ -111,26 +111,70 @@ def cosamp_reconstruct(
     r = np.copy(y)
     iteration_threshold = 20
 
-    (phi, phi_transpose, phi_pseudoinverse) = compressive_sensing_operators
+    solve_on_support = None
+    phi_matrix = None
+    if len(compressive_sensing_operators) == 4:
+        phi, phi_transpose, phi_pseudoinverse, fourth = compressive_sensing_operators
+        if callable(fourth):
+            solve_on_support = fourth
+        else:
+            phi_matrix = fourth
+    else:
+        phi, phi_transpose, phi_pseudoinverse = compressive_sensing_operators
+
+    if solve_on_support is None and phi_matrix is None:
+        try:
+            n = x_init.n
+            m = len(y)
+            phi_matrix = np.zeros((m, n), dtype=np.result_type(y, float))
+            for idx in range(n):
+                basis_vector = np.zeros(n)
+                basis_vector[idx] = 1.0
+                basis_coeffs = WtCoeffs.from_flat_coeffs(
+                    flat_coeffs=basis_vector,
+                    root_count=x_init.root_count,
+                    max_level=x_init.max_level,
+                    wavelet=x_init.wavelet,
+                )
+                phi_matrix[:, idx] = phi(basis_coeffs)
+        except Exception:
+            phi_matrix = None
+
+    def least_squares_on_support(support: set[int]) -> WtCoeffs:
+        flat_coeffs = np.zeros(x_init.n)
+        support_idx = np.array(sorted(support), dtype=int)
+        if support_idx.size > 0:
+            a_support = phi_matrix[:, support_idx]
+            coeffs_support, _, _, _ = np.linalg.lstsq(a_support, y, rcond=None)
+            flat_coeffs[support_idx] = coeffs_support
+        return WtCoeffs.from_flat_coeffs(
+            flat_coeffs=flat_coeffs,
+            root_count=x_init.root_count,
+            max_level=x_init.max_level,
+            wavelet=x_init.wavelet,
+        )
 
     for _ in tqdm(range(iteration_threshold), desc="CoSaMP iterations", disable=True):
         e = phi_transpose(r)
         omega_e_double_support = tree_projection(e, 2 * tree_sparsity).support
         t = x_hat.support | omega_e_double_support
-        b_coeffs_estimate = phi_pseudoinverse(y).on_support(t)
+        if solve_on_support is not None:
+            b_coeffs_estimate = solve_on_support(y, t)
+        elif phi_matrix is not None:
+            b_coeffs_estimate = least_squares_on_support(t)
+        else:
+            b_coeffs_estimate = phi_pseudoinverse(y).on_support(t)
         x_hat = tree_projection(b_coeffs_estimate, tree_sparsity)
         r = y - phi(x_hat)
+
+    if solve_on_support is not None:
+        x_hat = solve_on_support(y, x_hat.support)
+    elif phi_matrix is not None:
+        x_hat = least_squares_on_support(x_hat.support)
+
     return x_hat
 
 
-# TODO: Update types
-# MeasurementFunction = Callable[[np.ndarray], np.ndarray]
-# ReconstructionAlgorithm = Callable[
-#     [np.ndarray, int, WtCoeffs, MeasurementFunction, MeasurementFunction],
-#     WtCoeffs,
-# ]
-
-# RECONSTRUCTION_ALGORITHMS: dict[str, ReconstructionAlgorithm] = {
 RECONSTRUCTION_ALGORITHMS = {
     "CoSaMP": cosamp_reconstruct,
 }
@@ -141,7 +185,10 @@ def reconstruct(
     y: np.ndarray,
     x_init: WtCoeffs,
     tree_sparsity: int,
-    compressive_sensing_operators,
+    compressive_sensing_operators=None,
+    measurement_op=None,
+    adjoint_op=None,
+    pseudo_inverse_op=None,
 ):
     """
     Dispatcher: run a named reconstruction algorithm.
@@ -170,8 +217,28 @@ def reconstruct(
 
     reconstruction_algorithm = RECONSTRUCTION_ALGORITHMS[reconstruction_mode]
 
+    if compressive_sensing_operators is not None:
+        if any(op is None for op in compressive_sensing_operators):
+            return x_init
+        x_hat = reconstruction_algorithm(
+            y, tree_sparsity, x_init, compressive_sensing_operators
+        )
+        return x_hat
+
+    if measurement_op is None or adjoint_op is None:
+        return x_init
+
+    if pseudo_inverse_op is None:
+        x_hat = reconstruction_algorithm(
+            y, tree_sparsity, x_init, measurement_op, adjoint_op
+        )
+        return x_hat
+
     x_hat = reconstruction_algorithm(
-        y, tree_sparsity, x_init, compressive_sensing_operators
+        y,
+        tree_sparsity,
+        x_init,
+        (measurement_op, adjoint_op, pseudo_inverse_op),
     )
 
     return x_hat
