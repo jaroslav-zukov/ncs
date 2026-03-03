@@ -17,17 +17,17 @@ def test_measure_and_reconstruct(mocker):
     coeffs_x.max_level = 3
     coeffs_x.wavelet = "db4"
 
-    mock_signal_z = np.random.randn(n)
     mock_measurement_op = mocker.Mock(return_value=np.random.randn(m))
     mock_adjoint_op = mocker.Mock()
+    mock_pseudo_inverse_op = mocker.Mock()
     mock_x_hat = mocker.Mock(spec=WtCoeffs)
 
     mocker.patch(
-        "ncs.compressed_sensing_module.inverse_transform", return_value=mock_signal_z
+        "ncs.compressed_sensing_module.inverse_transform", return_value=np.random.randn(n)
     )
     mock_create_meas = mocker.patch(
-        "ncs.compressed_sensing_module.create_measurement_operator",
-        return_value=(mock_measurement_op, mock_adjoint_op),
+        "ncs.compressed_sensing_module.create_measurement_operators",
+        return_value=(mock_measurement_op, mock_adjoint_op, mock_pseudo_inverse_op),
     )
     mocker.patch("ncs.compressed_sensing_module.WtCoeffs.from_flat_coeffs")
     mock_reconstruct = mocker.patch(
@@ -48,7 +48,7 @@ def test_measure_and_reconstruct(mocker):
     call_kwargs = mock_reconstruct.call_args.kwargs
     assert call_kwargs["reconstruction_mode"] == reconstruction_mode
     assert call_kwargs["tree_sparsity"] == target_tree_sparsity
-    assert call_kwargs["measurement_op"] == mock_measurement_op
-    assert call_kwargs["adjoint_op"] == mock_adjoint_op
+    assert isinstance(call_kwargs["compressive_sensing_operators"], tuple)
+    assert len(call_kwargs["compressive_sensing_operators"]) == 3
 
     assert result == mock_x_hat

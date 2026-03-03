@@ -1,3 +1,6 @@
 /data/
 /src/ncs.egg-info/
 .idea/copilot*
+__pycache__/
+*.pyc
+.venv/
