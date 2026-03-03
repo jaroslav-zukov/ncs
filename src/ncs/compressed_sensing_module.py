@@ -42,7 +42,7 @@ reconstruction.
 
 import numpy as np
 
-from ncs.measurement_module import create_measurement_operator
+from ncs.measurement_module import create_measurement_operators
 from ncs.reconstruction_module import reconstruct
 from ncs.wavelet_module import forward_transform, inverse_transform
 from ncs.wt_coeffs import WtCoeffs
@@ -98,7 +98,7 @@ def measure_and_reconstruct(
     """
     n = coeffs_x.n
 
-    operator_bundle = create_measurement_operator(
+    operator_bundle = create_measurement_operators(
         measurement_mode, n, m, seed
     )
     if len(operator_bundle) == 3:

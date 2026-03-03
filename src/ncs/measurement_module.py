@@ -93,16 +93,22 @@ def create_subsampling_operator(n: int, m: int, seed: int = None):
     """
     rng = np.random.default_rng(seed)
     indices = np.sort(rng.choice(n, size=m, replace=False))
+    scale = np.sqrt(n / m)
 
     def subsample(signal: np.ndarray) -> np.ndarray:
-        return signal[indices]
+        return signal[indices] * scale
 
     def transposed(measurements: np.ndarray) -> np.ndarray:
         upsampled = np.zeros(n)
         upsampled[indices] = measurements
-        return upsampled
+        return upsampled * scale
 
-    return subsample, transposed
+    def pseudo_inverse(measurements: np.ndarray) -> np.ndarray:
+        upsampled = np.zeros(n)
+        upsampled[indices] = measurements
+        return upsampled / scale
+
+    return subsample, transposed, pseudo_inverse
 
 
 def create_gaussian_operator(n: int, m: int, seed: int = None):
@@ -146,7 +152,12 @@ def create_gaussian_operator(n: int, m: int, seed: int = None):
     def adjoint(measurements: np.ndarray) -> np.ndarray:
         return phi.T @ measurements
 
-    return measure, adjoint
+    phi_pinv = np.linalg.pinv(phi)
+
+    def pseudo_inverse(measurements: np.ndarray) -> np.ndarray:
+        return phi_pinv @ measurements
+
+    return measure, adjoint, pseudo_inverse
 
 
 def _create_gaussian_operator_with_pinv(n: int, m: int, seed: int = None):
@@ -308,11 +319,82 @@ def create_random_modulation_operator(n: int, m: int, seed: int = None):
     return measure, adjoint, pseudo_inverse
 
 
+def create_wavelet_packet_operator(n: int, m: int, wavelet: str = 'haar',
+                                    max_level: int = None, seed: int = None):
+    """
+    Creates a time-domain subsampling operator paired with a WP sparsity basis.
+
+    Unlike Gaussian/Fourier subsampling where the measurement matrix drives
+    incoherence, here incoherence is achieved by choosing a WP sparsity basis
+    whose basis functions have lower pointwise amplitude (wider time support)
+    than standard DWT wavelets.
+
+    The measurement operator itself is plain time-domain subsampling S.
+    The WP basis is selected via the Coifman-Wickerhauser best-basis algorithm
+    (minimum Shannon entropy) and is stored in the returned ``wp_info`` dict
+    for use by reconstruction algorithms.
+
+    Theoretical basis
+    -----------------
+    WP basis functions at depth j satisfy:
+        max_t |ψ_{j,p}(t)| ≤ C · 2^{-j/2}
+    so the coherence with time-domain subsampling satisfies:
+        μ(S, Ψ_WP at level j) ≤ C² · 2^{-j}
+    which decreases with decomposition depth. The best-basis selection
+    automatically finds the WP tree that minimises Shannon entropy of
+    the signal's coefficients, trading coherence against sparsity.
+
+    References
+    ----------
+    Coifman & Wickerhauser (1992). Entropy-based algorithms for best
+        basis selection. IEEE Trans. Inf. Theory, 38(2), 713–718.
+    Mallat (2008). A Wavelet Tour of Signal Processing (3rd ed.), Ch. 8.
+
+    Args:
+        n: Signal length (power of 2)
+        m: Number of measurements
+        wavelet: Orthogonal wavelet for WP decomposition (e.g. 'haar', 'db4')
+        max_level: WP tree depth (default: log2(n))
+        seed: Random seed for subsampling indices
+
+    Returns:
+        Tuple of (measure, adjoint, pseudo_inverse, wp_info) where wp_info is
+        a dict with keys 'wavelet', 'max_level', 'n' (leaf_nodes are computed
+        per-signal via best_basis_selection from wavelet_packet_module).
+    """
+    rng = np.random.default_rng(seed)
+    indices = np.sort(rng.choice(n, size=m, replace=False))
+    scale = np.sqrt(n / m)
+
+    if max_level is None:
+        max_level = int(np.log2(n))
+
+    def measure(signal: np.ndarray) -> np.ndarray:
+        """Plain time-domain subsampling S·x (scaled)."""
+        return signal[indices] * scale
+
+    def adjoint(measurements: np.ndarray) -> np.ndarray:
+        """S^T: scatter measurements back to time domain (scaled)."""
+        upsampled = np.zeros(n)
+        upsampled[indices] = measurements * scale
+        return upsampled
+
+    def pseudo_inverse(measurements: np.ndarray) -> np.ndarray:
+        """S^†: upsample scaled by sqrt(m/n)."""
+        upsampled = np.zeros(n)
+        upsampled[indices] = measurements * np.sqrt(m / n)
+        return upsampled
+
+    wp_info = {'wavelet': wavelet, 'max_level': max_level, 'n': n}
+    return measure, adjoint, pseudo_inverse, wp_info
+
+
 MEASUREMENT_OPERATORS = {
     "subsampling": create_subsampling_operator,
     "gaussian": create_gaussian_operator,
     "fourier_subsampling": create_fourier_subsampling_operator,
     "random_modulation": create_random_modulation_operator,
+    "wavelet_packet": lambda n, m, seed=None: create_wavelet_packet_operator(n, m, seed=seed)[:3],
 }
 
 
