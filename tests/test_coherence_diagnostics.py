@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import ncs.coherence_diagnostics as coherence_diagnostics_module
 from ncs.coherence_diagnostics import (
     coherence_heatmap,
     compute_gram_matrix,
@@ -122,6 +123,41 @@ def test_phase_transition_grid_contract():
     assert np.all((grid["recovery_probability"] >= 0.0) & (grid["recovery_probability"] <= 1.0))
 
 
+def test_phase_transition_grid_threads_measurement_mode(monkeypatch):
+    n = 16
+    called_modes: list[str] = []
+
+    def fake_measure_and_reconstruct(
+        measurement_mode: str,
+        m: int,
+        reconstruction_mode: str,
+        coeffs_x,
+        target_tree_sparsity: int,
+        seed: int,
+    ):
+        called_modes.append(measurement_mode)
+        return coeffs_x
+
+    monkeypatch.setattr(
+        coherence_diagnostics_module,
+        "measure_and_reconstruct",
+        fake_measure_and_reconstruct,
+    )
+
+    grid = phase_transition_grid(
+        measurement_mode="random_modulation",
+        n=n,
+        wavelet="haar",
+        m_values=[8],
+        k_values=[1, 2],
+        n_trials=2,
+    )
+
+    assert len(grid) == 2
+    assert len(called_modes) == 4
+    assert set(called_modes) == {"random_modulation"}
+
+
 def test_local_coherence_matrix_returns_metadata():
     n = 16
     G = np.random.default_rng(0).standard_normal((8, n))
@@ -132,6 +168,17 @@ def test_local_coherence_matrix_returns_metadata():
     assert local_mu.shape[0] == len(metadata["band_boundaries"])
     assert local_mu.shape[1] == len(metadata["scale_boundaries"])
     assert np.all(np.isfinite(local_mu))
+
+    bands = metadata["band_boundaries"]
+    starts = [start for start, _ in bands]
+    ends = [end for _, end in bands]
+
+    assert starts[0] == 0
+    assert ends[-1] == G.shape[0]
+    assert np.all(np.diff(starts) >= 0)
+    assert np.all(np.diff(ends) >= 0)
+    assert all(start <= end for start, end in bands)
+    assert all(ends[idx] == starts[idx + 1] for idx in range(len(bands) - 1))
 
 
 def test_optimal_multilevel_allocation_sums_to_total_budget():
@@ -149,6 +196,70 @@ def test_optimal_multilevel_allocation_sums_to_total_budget():
     assert allocation.shape == local_sparsities.shape
     assert np.sum(allocation) == 20
     assert np.all(allocation >= 0)
+
+
+def test_optimal_multilevel_allocation_returns_normalized_weights_without_budget():
+    n = 16
+    coeffs = forward_transform(np.zeros(n), "haar")
+    local_sparsities = np.arange(1, coeffs.max_level + 2, dtype=float)
+
+    allocation = optimal_multilevel_allocation(
+        local_sparsities=local_sparsities,
+        n=n,
+        wavelet="haar",
+        total_m=None,
+    )
+
+    assert allocation.shape == local_sparsities.shape
+    assert np.all(np.isfinite(allocation))
+    assert np.all(allocation >= 0.0)
+    assert np.sum(allocation) == pytest.approx(1.0)
+
+
+def test_optimal_multilevel_allocation_uses_coif9_theorem_constants():
+    n = 1024
+    coeffs = forward_transform(np.zeros(n), "coif9")
+    level_count = coeffs.max_level + 1
+    local_sparsities = np.arange(1, level_count + 1, dtype=float)
+
+    scale_sizes = np.array([len(group) for group in coeffs.coeff_groups], dtype=float)
+    scale_ends = np.cumsum(scale_sizes)
+    scale_starts = np.concatenate(([0.0], scale_ends[:-1]))
+    n_prev = np.maximum(scale_starts, 1.0)
+    prefactor = (scale_ends - n_prev) / n_prev
+
+    alpha = 3.2
+    nu = 18.0
+    expected_weights = np.zeros(level_count, dtype=float)
+    for level_k in range(level_count):
+        left = max(0, level_k - 1)
+        right = min(level_count - 1, level_k + 1)
+        neighbor_max = float(np.max(local_sparsities[left : right + 1]))
+
+        coarse_to_fine = 0.0
+        for level_l in range(level_k):
+            coarse_to_fine += float(
+                local_sparsities[level_l] * 2.0 ** (-(alpha - 0.5) * (level_k - level_l))
+            )
+
+        fine_to_coarse = 0.0
+        for level_l in range(level_k + 1, level_count):
+            fine_to_coarse += float(local_sparsities[level_l] * 2.0 ** (-nu * (level_l - level_k)))
+
+        expected_weights[level_k] = prefactor[level_k] * (
+            neighbor_max + coarse_to_fine + fine_to_coarse
+        )
+
+    expected_allocation = expected_weights / np.sum(expected_weights)
+
+    allocation = optimal_multilevel_allocation(
+        local_sparsities=local_sparsities,
+        n=n,
+        wavelet="coif9",
+        total_m=None,
+    )
+
+    assert np.allclose(allocation, expected_allocation)
 
 
 def test_flip_test_returns_expected_keys():

@@ -76,6 +76,66 @@ def _dyadic_level_boundaries(n: int) -> list[int]:
     return boundaries
 
 
+def _largest_remainder_integer_allocation(weights: np.ndarray, total: int) -> np.ndarray:
+    if total < 0:
+        raise ValueError("total must be non-negative")
+    if weights.ndim != 1:
+        raise ValueError("weights must be a 1-D array")
+    if len(weights) == 0:
+        return np.array([], dtype=int)
+
+    if total == 0:
+        return np.zeros(len(weights), dtype=int)
+
+    if np.any(weights < 0):
+        raise ValueError("weights must be non-negative")
+
+    weight_sum = float(np.sum(weights))
+    if weight_sum == 0:
+        probabilities = np.ones(len(weights), dtype=float) / len(weights)
+    else:
+        probabilities = weights / weight_sum
+
+    scaled = probabilities * total
+    allocation = np.floor(scaled).astype(int)
+    remainder = int(total - np.sum(allocation))
+    if remainder > 0:
+        fractional = scaled - allocation
+        order = np.argsort(-fractional)
+        allocation[order[:remainder]] += 1
+
+    return allocation
+
+
+def _dyadic_row_bands(total_rows: int, n_bands: int) -> list[tuple[int, int]]:
+    if total_rows < 0:
+        raise ValueError("total_rows must be non-negative")
+    if n_bands < 1:
+        raise ValueError("n_bands must be positive")
+
+    dyadic_weights = np.array([1] + [2 ** (idx - 1) for idx in range(1, n_bands)], dtype=float)
+    band_sizes = _largest_remainder_integer_allocation(dyadic_weights, total_rows)
+
+    boundaries: list[tuple[int, int]] = []
+    start = 0
+    for size in band_sizes:
+        end = start + int(size)
+        boundaries.append((start, end))
+        start = end
+
+    return boundaries
+
+
+def _wavelet_alpha_nu(wavelet: str) -> tuple[float, float]:
+    wavelet_obj = pywt.Wavelet(wavelet)
+    alpha_overrides = {
+        "coif9": 3.2,
+    }
+    alpha = alpha_overrides.get(wavelet, max((wavelet_obj.dec_len - 1) / 2.0, 1.0))
+    nu = float(wavelet_obj.vanishing_moments_psi or 1.0)
+    return float(alpha), nu
+
+
 def compute_gram_matrix(
     measure_op: MeasureFn | MeasurementOperatorTriple,
     n: int,
@@ -286,7 +346,7 @@ def local_coherence_matrix(
     Compute local coherence matrix across row bands and wavelet scales.
 
     Columns are partitioned by wavelet scale using the dyadic structure of
-    WtCoeffs. Rows are split into r equal-sized bands with r=max_level+1.
+    WtCoeffs. Rows are split into r dyadic bands with r=max_level+1.
     For each pair (band k, scale l), this computes:
 
         μ_{N,M}(k,l) = sqrt(
@@ -324,8 +384,7 @@ def local_coherence_matrix(
         scale_start = scale_end
 
     m = G.shape[0]
-    row_edges = np.linspace(0, m, r + 1, dtype=int)
-    band_boundaries = [(int(row_edges[idx]), int(row_edges[idx + 1])) for idx in range(r)]
+    band_boundaries = _dyadic_row_bands(total_rows=m, n_bands=r)
 
     abs_sq = np.abs(G) ** 2
     local_mu = np.zeros((r, r), dtype=float)
@@ -357,11 +416,8 @@ def optimal_multilevel_allocation(
     """
     Compute multilevel measurement allocation from local sparsities.
 
-    Uses a wavelet-regularity weighted allocation motivated by the local
-    coherence framework in Adcock et al. Wavelet smoothness proxies are taken
-    from PyWavelets metadata:
-      - alpha proxy from decomposition filter length (dec_len),
-      - nu from vanishing_moments_psi.
+    Uses a Theorem 6.2-inspired allocation structure from the local
+    coherence framework in Adcock et al.
 
     Args:
         local_sparsities: Non-negative vector s_l with one entry per scale.
@@ -387,13 +443,32 @@ def optimal_multilevel_allocation(
     if np.any(local_sparsities < 0):
         raise ValueError("local_sparsities must be non-negative")
 
-    wavelet_obj = pywt.Wavelet(wavelet)
-    alpha = max((wavelet_obj.dec_len - 1) / 2.0, 1.0)
-    nu = float(wavelet_obj.vanishing_moments_psi or 1)
+    alpha, nu = _wavelet_alpha_nu(wavelet)
 
-    levels = np.arange(level_count, dtype=float)
-    decay = 2.0 ** (-np.minimum(alpha, nu) * levels)
-    weights = np.sqrt(local_sparsities + 1e-12) * decay
+    scale_sizes = np.array([len(group) for group in template.coeff_groups], dtype=float)
+    scale_ends = np.cumsum(scale_sizes)
+    scale_starts = np.concatenate(([0.0], scale_ends[:-1]))
+    n_prev = np.maximum(scale_starts, 1.0)
+    prefactor = (scale_ends - n_prev) / n_prev
+
+    weights = np.zeros(level_count, dtype=float)
+    for level_k in range(level_count):
+        left = max(0, level_k - 1)
+        right = min(level_count - 1, level_k + 1)
+        neighbor_max = float(np.max(local_sparsities[left : right + 1]))
+
+        coarse_to_fine = 0.0
+        for level_l in range(level_k):
+            a_kl = level_k - level_l
+            coarse_to_fine += float(local_sparsities[level_l] * 2.0 ** (-(alpha - 0.5) * a_kl))
+
+        fine_to_coarse = 0.0
+        for level_l in range(level_k + 1, level_count):
+            b_kl = level_l - level_k
+            fine_to_coarse += float(local_sparsities[level_l] * 2.0 ** (-nu * b_kl))
+
+        theorem_term = neighbor_max + coarse_to_fine + fine_to_coarse
+        weights[level_k] = max(float(prefactor[level_k] * theorem_term), 0.0)
 
     if np.all(weights == 0):
         allocation = np.ones(level_count, dtype=float) / level_count
@@ -406,14 +481,7 @@ def optimal_multilevel_allocation(
     if total_m < 0:
         raise ValueError("total_m must be non-negative")
 
-    scaled = allocation * total_m
-    integer_alloc = np.floor(scaled).astype(int)
-    remainder = int(total_m - np.sum(integer_alloc))
-    if remainder > 0:
-        order = np.argsort(-(scaled - integer_alloc))
-        integer_alloc[order[:remainder]] += 1
-
-    return integer_alloc
+    return _largest_remainder_integer_allocation(allocation, total_m)
 
 
 def _reconstruct_with_custom_operator(
@@ -482,6 +550,8 @@ def flip_test(
     """
     if not _is_power_of_two(n):
         raise ValueError("n must be a power of 2")
+    if not (1 <= k <= n):
+        raise ValueError("k must satisfy 1 <= k <= n")
     if n_trials < 1:
         raise ValueError("n_trials must be >= 1")
 
