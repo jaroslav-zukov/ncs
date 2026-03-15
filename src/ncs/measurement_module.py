@@ -93,26 +93,29 @@ def _allocate_multilevel_samples(
     if m > int(np.sum(band_sizes)):
         raise ValueError("m exceeds available sequency coefficients in dyadic bands")
 
+    wavelet_obj = pywt.Wavelet(wavelet)
+    alpha_overrides = {
+        "haar": 1.0,
+        "db4": 1.5,
+        "coif9": 3.2,
+    }
+    alpha = alpha_overrides.get(wavelet, float(wavelet_obj.dec_len) / 2.0)
+    nu = float(wavelet_obj.vanishing_moments_psi or 1.0)
+    beta = min(alpha, nu)
+
     if local_sparsities is not None:
         sparsities = np.asarray(local_sparsities, dtype=float)
         if sparsities.shape != (r,):
             raise ValueError(f"local_sparsities must have length {r}")
         if np.any(sparsities < 0):
             raise ValueError("local_sparsities must be non-negative")
-
-        wavelet_obj = pywt.Wavelet(wavelet)
-        alpha = max((wavelet_obj.dec_len - 1) / 2.0, 1.0)
-        nu = float(wavelet_obj.vanishing_moments_psi or 1.0)
-        beta = min(alpha, nu)
-
-        levels = np.arange(1, r + 1, dtype=float)
-        weights = np.sqrt(sparsities + 1e-12) * (2.0 ** (-beta * (levels - 1.0)))
     else:
-        weights = np.zeros(r, dtype=float)
-        weights[0] = 1.0
-        if r > 1:
-            levels = np.arange(2, r + 1, dtype=float)
-            weights[1:] = 2.0 ** (-0.5 * levels)
+        sparsities = np.ones(r, dtype=float)
+
+    n_prev = np.concatenate(([1], 1 + np.cumsum(band_sizes[:-1]))).astype(float)
+    band_factor = band_sizes / n_prev
+    interference = 2.0 ** (-beta * np.arange(r, dtype=float))
+    weights = sparsities * band_factor * (1.0 + interference)
 
     if np.all(weights == 0):
         weights = np.ones(r, dtype=float)
@@ -120,11 +123,6 @@ def _allocate_multilevel_samples(
     raw = m * weights / np.sum(weights)
     allocation = np.floor(raw).astype(int)
     allocation = np.minimum(allocation, band_sizes)
-
-    if local_sparsities is None:
-        baseline = min(int(band_sizes[0]), m)
-        allocation[0] = max(allocation[0], baseline)
-        allocation[1:] = np.minimum(allocation[1:], band_sizes[1:])
 
     deficit = int(m - np.sum(allocation))
     if deficit > 0:

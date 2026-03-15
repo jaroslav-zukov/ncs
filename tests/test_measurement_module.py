@@ -263,3 +263,21 @@ def test_measurement_dispatcher_supports_hadamard_modes():
 
     assert len(hadamard_ops) == 3
     assert len(multilevel_ops) == 3
+
+
+def test_hadamard_multilevel_coif9_tracks_local_sparsity_profile():
+    n, m = 64, 24
+    local_sparsities = np.array([1, 2, 3, 4, 5, 6], dtype=float)
+
+    _, _, _, metadata = create_hadamard_multilevel_operator(
+        n=n,
+        m=m,
+        wavelet="coif9",
+        local_sparsities=local_sparsities,
+        seed=19,
+    )
+
+    allocation = metadata["allocation"]
+    assert int(np.sum(allocation)) == m
+    assert allocation[-1] >= allocation[0]
+    assert allocation[-2] >= allocation[1]
