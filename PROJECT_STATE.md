@@ -156,8 +156,8 @@ measure_and_reconstruct(measurement_mode, m, reconstruction_mode, coeffs_x, targ
 | `fourier_subsampling` | Frequency domain (rfft) | Yes (Candès et al.) | Yes | ✅ Working |
 | `random_modulation` | Time domain (±1 chipping + subsample) | Partially | Empirical only | ✅ Working |
 | `wavelet_packet` | Time domain + WP best basis | Reduced coherence via WP | Partial (WP depth dependent) | ✅ Working |
-| `hadamard` | Sequency domain (WHT) | Yes (asymptotically) | Yes (multilevel) | ❌ Not implemented |
-| `hadamard_multilevel` | Sequency domain (WHT, variable density) | Yes (optimally) | Yes (Thm 6.2) | ❌ Not implemented |
+| `hadamard` | Sequency domain (WHT) | Yes (asymptotically) | Yes (multilevel) | ✅ Working |
+| `hadamard_multilevel` | Sequency domain (WHT, variable density) | Yes (optimally) | Yes (Thm 6.2) | ✅ Working |
 
 ### 4.4 Known Bugs and WIP
 
@@ -167,13 +167,12 @@ measure_and_reconstruct(measurement_mode, m, reconstruction_mode, coeffs_x, targ
 - The pseudo-inverse of composed operator `(S ∘ IDWT)` is approximated as `DWT ∘ S†`, which is NOT correct. A proper least-squares pseudo-inverse may be needed for CoSaMP convergence guarantees.
 - The reconstruction module materializes the full Φ matrix (m×n) for least-squares on support — this is O(mn) memory and O(mn²) for pinv. Acceptable for n ≤ 8192 but doesn't scale.
 
-**coherence_diagnostics.py (newly created, has bugs):**
-1. `phase_transition_grid`: hardcodes `measurement_mode="subsampling"` and passes unsupported `measurement_op_factory` kwarg to `measure_and_reconstruct`
-2. `mutual_coherence`: normalization assumes energy-preserving operators without documenting this
-3. `empirical_rip_constant`: hardcoded seed=0, should be a parameter
-4. Missing: `local_coherence_matrix()` — the central quantity from Adcock et al.
-5. Missing: `optimal_multilevel_allocation()` — computes per-band {m_k} from {s_l}
-6. Missing: `flip_test()` — validates that operator exploits signal structure beyond sparsity
+**coherence_diagnostics.py:**
+- Section 7.1 fixes implemented: `phase_transition_grid` dispatch,
+  `mutual_coherence` energy-preserving note, explicit seed in
+  `empirical_rip_constant`, plus `local_coherence_matrix`,
+  `optimal_multilevel_allocation`, and `flip_test`.
+- Current focus has shifted to cross-operator benchmarking (section 7.3).
 
 **General:**
 - Signal padding: currently signals are cut to nearest power of 2 (noted in README)
@@ -257,98 +256,74 @@ Key papers loaded in the project (with their role):
 
 ---
 
-## 7. Pending Implementation — Codex Prompts
+## 7. Codex Implementation Status + Next Prompts
 
 ### 7.1 Fix coherence_diagnostics.py
 
-**Priority: HIGH (prerequisite for all experiments)**
+**Status: ✅ Completed**
 
 ```
-Task: Fix bugs and add missing features to src/ncs/coherence_diagnostics.py.
-
-Bug fixes:
-1. phase_transition_grid: Remove hardcoded measurement_mode="subsampling".
-   Accept a measurement_mode: str parameter and pass it to
-   measure_and_reconstruct. Remove the unsupported measurement_op_factory kwarg.
-
-2. mutual_coherence: Add docstring note that formula assumes energy-preserving
-   operators (E[‖Φx‖²] = ‖x‖²).
-
-3. empirical_rip_constant: Make seed parameter explicit (default=0).
-
-New features:
-4. local_coherence_matrix(G, n, wavelet) -> np.ndarray:
-   Partition columns of G by wavelet scale, rows into r dyadic bands.
-   Compute μ_{N,M}(k,l) per (band k, scale l) pair using Adcock et al. definition:
-   μ_{N,M}(k,l) = sqrt(max_{i∈band_k, j∈scale_l} |G_{ij}|² · max_{i∈band_k, j∈all} |G_{ij}|²)
-   Return r × (max_level+1) matrix plus band/scale boundary metadata.
-
-5. optimal_multilevel_allocation(local_sparsities, n, wavelet, total_m) -> np.ndarray:
-   Given vector of local sparsities s_l (one per wavelet scale), compute
-   per-band allocation {m_k} using Theorem 6.2 formula. Use the wavelet's
-   smoothness α and vanishing moments ν from pywt. For coif9: ν=18, α≈3.2.
-   If total_m provided, normalize to sum to total_m.
-
-6. flip_test(measure_op, n, wavelet, k, n_trials=50) -> dict:
-   For each trial: generate tree-k-sparse signal x, measure y = Φ·IDWT(x),
-   reconstruct x_hat via CoSaMP. Then create x_flip by randomly permuting
-   wavelet coefficient indices (preserving sparsity, destroying tree structure),
-   measure y_flip, reconstruct x_flip_hat. Return {mse_structured, mse_flipped,
-   ratio}. Ratio >> 1 means operator exploits structure.
+Delivered:
+1. `phase_transition_grid` uses caller-provided `measurement_mode` and no unsupported kwargs.
+2. `mutual_coherence` explicitly documents the energy-preserving assumption.
+3. `empirical_rip_constant` exposes deterministic `seed` (default 0).
+4. Added `local_coherence_matrix` with dyadic band/scale metadata.
+5. Added `optimal_multilevel_allocation` with Theorem 6.2-style structure.
+6. Added `flip_test` for structured-vs-flipped reconstruction diagnostics.
 ```
 
 ### 7.2 Hadamard Measurement Operators
 
-**Priority: HIGH (core new operator)**
+**Status: ✅ Core implementation completed; next prompt is validation/tuning**
 
 ```
-Task: Add Walsh-Hadamard measurement operators to src/ncs/measurement_module.py.
+Task: Validate and tune the implemented Walsh-Hadamard operators.
 
-1. create_hadamard_operator(n, m, seed=None):
-   - Fast Walsh-Hadamard Transform with SEQUENCY ORDERING (not natural/Hadamard ordering).
-   - Sequency = number of zero-crossings, analogous to frequency.
-   - Sort rows of scipy.linalg.hadamard(n) by sequency count.
-   - Subsample m rows uniformly at random, scale √(n/m).
-   - Return (measure, adjoint, pseudo_inverse) triple.
+1. Verify `create_hadamard_operator`:
+   - Confirm sequency ordering is used (DC first, increasing zero-crossings).
+   - Confirm adjoint identity and scaling stability for m/n sweeps.
 
-2. create_hadamard_multilevel_operator(n, m, wavelet='coif9', local_sparsities=None, seed=None):
-   - Partition sequency domain into r = log2(n) dyadic bands.
-   - If local_sparsities provided, use Theorem 6.2 formula with wavelet's α, ν.
-   - For coif9 (ν=18, α≈3.2): cross-band interference is negligible,
-     allocation approximately proportional to local sparsity s_l × band size.
-   - Default allocation for coif9: nearly flat (unlike Haar where heavy low-freq bias needed).
-   - Within each band, subsample m_k rows uniformly at random.
-   - Return (measure, adjoint, pseudo_inverse) + metadata dict with allocations.
+2. Verify/tune `create_hadamard_multilevel_operator`:
+   - Confirm default `wavelet='coif9'` and theorem-based allocation metadata
+     (`alpha`, `nu`, `allocation_weights`, `allocation`).
+   - Stress-test allocation behavior for contrasting `local_sparsities` profiles.
+   - Validate dyadic band coverage and no over-allocation per band.
 
-3. Integration:
-   - Register as "hadamard" and "hadamard_multilevel" in MEASUREMENT_OPERATORS.
-   - Add to measure_and_reconstruct in compressed_sensing_module.py.
-   - Composition: phi(wt) = S · WHT · IDWT(wt), phi_T(y) = DWT · WHT^T · S^T(y).
-   - WHT is symmetric and orthogonal: WHT^T = WHT^{-1} = (1/n)·WHT.
+3. Integration checks:
+   - Keep registration names: `hadamard`, `hadamard_multilevel`.
+   - Confirm end-to-end compatibility with `measure_and_reconstruct` + CoSaMP.
 
-CRITICAL: sequency ordering. Without it, multilevel sampling is meaningless.
+Acceptance:
+   - All hadamard measurement and dispatcher tests pass.
+   - Operator metadata is consistent and reproducible under fixed seeds.
 ```
 
 ### 7.3 Measurement Operator Benchmark Experiment
 
-**Priority: MEDIUM (after operators are implemented)**
+**Status: ✅ Completed**
 
 ```
-Task: Create src/ncs/experiments_measurement_comparison.py.
+Delivered:
+1. Created benchmark module: `src/ncs/experiments_measurement_comparison.py`.
+2. Implemented benchmark runner over required measurement modes and configurable
+   `m_values`, with deterministic seeds and runtime tracking.
+3. Implemented stable CSV schema with columns:
+   - `measurement_mode`, `m`, `signal_index`, `m_over_k`, `mse`,
+     `support_recovery_rate`, `exact_recovery`, `wall_clock_time_s`.
+4. Implemented figure outputs:
+   - Main: MSE vs `m/k` (operator curves with error bands),
+   - empirical phase-transition curve,
+   - side-by-side coherence heatmaps using reduced diagnostic size for tractable runtime
+     (separate from full benchmark settings).
+5. Added script entrypoint `main()` that runs benchmark + plotting and prints output paths.
+6. Contract notes:
+   - `support_recovery_rate = |supp(x) ∩ supp(x_hat)| / |supp(x)|` (recall on true support),
+   - `exact_recovery = 1 if mse < 1e-6 else 0`.
+7. Validation coverage exists in `tests/test_experiments_measurement_comparison.py`.
 
-1. Generate 20 random tree-sparse signals: n=4096 (power=12), tree_sparsity=100, wavelet='coif9'.
-
-2. For each measurement mode in ['gaussian', 'fourier_subsampling', 'random_modulation',
-   'hadamard', 'hadamard_multilevel'], and m in np.linspace(150, 1500, 20).astype(int):
-   - Run measure_and_reconstruct with reconstruction_mode='CoSaMP'
-   - Record: measurement_mode, m, signal_index, MSE, support_recovery_rate, wall_clock_time
-
-3. Produce figures:
-   - Main: MSE vs m/k ratio, one curve per operator, with error bands
-   - Inset: empirical phase transition (P(exact recovery) > 0.95) vs m/k
-   - Coherence heatmaps for each operator side by side
-
-4. Save results CSV + figures.
+Next actionable Codex prompt:
+   - Run the full `n=4096` sweep, export publication-ready figures/tables,
+     and compare operator ranking by `m/k` threshold targets.
 ```
 
 ---

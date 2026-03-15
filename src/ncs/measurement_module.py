@@ -81,27 +81,67 @@ def _sequency_ordered_hadamard(n: int) -> np.ndarray:
     return hadamard_matrix[sequency_order]
 
 
+def _wavelet_alpha_nu(wavelet: str) -> tuple[float, float]:
+    wavelet_obj = pywt.Wavelet(wavelet)
+    alpha_overrides = {
+        "coif9": 3.2,
+    }
+    alpha = alpha_overrides.get(wavelet, max((wavelet_obj.dec_len - 1) / 2.0, 1.0))
+    nu = float(wavelet_obj.vanishing_moments_psi or 1.0)
+    return float(alpha), nu
+
+
+def _largest_remainder_capped(
+    raw: np.ndarray,
+    total: int,
+    capacities: np.ndarray,
+) -> np.ndarray:
+    allocation = np.floor(raw).astype(int)
+    allocation = np.minimum(allocation, capacities)
+
+    deficit = int(total - np.sum(allocation))
+    if deficit > 0:
+        fractional = raw - np.floor(raw)
+        for idx in np.argsort(-fractional):
+            available = int(capacities[idx] - allocation[idx])
+            if available <= 0:
+                continue
+            take = min(available, deficit)
+            allocation[idx] += take
+            deficit -= take
+            if deficit == 0:
+                break
+
+    if deficit > 0:
+        for idx in np.argsort(raw)[::-1]:
+            available = int(capacities[idx] - allocation[idx])
+            if available <= 0:
+                continue
+            take = min(available, deficit)
+            allocation[idx] += take
+            deficit -= take
+            if deficit == 0:
+                break
+
+    if int(np.sum(allocation)) != total:
+        raise ValueError("Internal allocation error: sampled row count does not equal m")
+
+    return allocation
+
+
 def _allocate_multilevel_samples(
     band_sizes: np.ndarray,
     m: int,
     wavelet: str,
     local_sparsities: np.ndarray | None,
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray, float, float]:
     r = len(band_sizes)
     if m < 1:
         raise ValueError("m must be positive")
     if m > int(np.sum(band_sizes)):
         raise ValueError("m exceeds available sequency coefficients in dyadic bands")
 
-    wavelet_obj = pywt.Wavelet(wavelet)
-    alpha_overrides = {
-        "haar": 1.0,
-        "db4": 1.5,
-        "coif9": 3.2,
-    }
-    alpha = alpha_overrides.get(wavelet, float(wavelet_obj.dec_len) / 2.0)
-    nu = float(wavelet_obj.vanishing_moments_psi or 1.0)
-    beta = min(alpha, nu)
+    alpha, nu = _wavelet_alpha_nu(wavelet)
 
     if local_sparsities is not None:
         sparsities = np.asarray(local_sparsities, dtype=float)
@@ -112,44 +152,37 @@ def _allocate_multilevel_samples(
     else:
         sparsities = np.ones(r, dtype=float)
 
-    n_prev = np.concatenate(([1], 1 + np.cumsum(band_sizes[:-1]))).astype(float)
-    band_factor = band_sizes / n_prev
-    interference = 2.0 ** (-beta * np.arange(r, dtype=float))
-    weights = sparsities * band_factor * (1.0 + interference)
+    n_ends = np.cumsum(band_sizes).astype(float)
+    n_prev = np.concatenate(([1.0], n_ends[:-1]))
+    prefactor = (n_ends - n_prev) / n_prev
+
+    weights = np.zeros(r, dtype=float)
+    for level_k in range(r):
+        left = max(0, level_k - 1)
+        right = min(r - 1, level_k + 1)
+        neighbor_max = float(np.max(sparsities[left : right + 1]))
+
+        coarse_to_fine = 0.0
+        for level_l in range(level_k):
+            a_kl = level_k - level_l
+            coarse_to_fine += float(sparsities[level_l] * 2.0 ** (-(alpha - 0.5) * a_kl))
+
+        fine_to_coarse = 0.0
+        for level_l in range(level_k + 1, r):
+            b_kl = level_l - level_k
+            fine_to_coarse += float(sparsities[level_l] * 2.0 ** (-nu * b_kl))
+
+        theorem_term = neighbor_max + coarse_to_fine + fine_to_coarse
+        weights[level_k] = max(float(prefactor[level_k] * theorem_term), 0.0)
 
     if np.all(weights == 0):
         weights = np.ones(r, dtype=float)
 
-    raw = m * weights / np.sum(weights)
-    allocation = np.floor(raw).astype(int)
-    allocation = np.minimum(allocation, band_sizes)
+    normalized_weights = weights / np.sum(weights)
+    raw = m * normalized_weights
+    allocation = _largest_remainder_capped(raw=raw, total=m, capacities=band_sizes)
 
-    deficit = int(m - np.sum(allocation))
-    if deficit > 0:
-        fractional = raw - np.floor(raw)
-        candidates = np.argsort(-fractional)
-        for idx in candidates:
-            available = int(band_sizes[idx] - allocation[idx])
-            if available <= 0:
-                continue
-            take = min(available, deficit)
-            allocation[idx] += take
-            deficit -= take
-            if deficit == 0:
-                break
-
-    if deficit > 0:
-        for idx in np.argsort(weights)[::-1]:
-            available = int(band_sizes[idx] - allocation[idx])
-            if available <= 0:
-                continue
-            take = min(available, deficit)
-            allocation[idx] += take
-            deficit -= take
-            if deficit == 0:
-                break
-
-    return allocation
+    return allocation, normalized_weights, alpha, nu
 
 
 def create_subsampling_operator(n: int, m: int, seed: int = None):
@@ -398,33 +431,34 @@ def create_hadamard_operator(n: int, m: int, seed: int = None):
 def create_hadamard_multilevel_operator(
     n: int,
     m: int,
-    wavelet: str = "haar",
+    wavelet: str = "coif9",
     local_sparsities: np.ndarray | None = None,
     seed: int = None,
 ):
     """
     Create a multilevel subsampled Walsh-Hadamard measurement operator.
 
-    Sequency coefficients are partitioned into r = log2(n) dyadic bands:
-        band k: [2^(k-1), 2^k),  k=1,...,r.
+    Sequency coefficients are partitioned into r = log2(n) dyadic bands
+    that cover all rows:
+        [(0, 2), (2, 4), (4, 8), ..., (n/2, n)).
     Within each band, rows are sampled uniformly at random using per-band
     allocations m_k.
 
-    If local_sparsities is provided, allocation follows a wavelet-regularity
-    weighted specialization of the multilevel sampling principle in Adcock
-    et al. Otherwise a default allocation is used that fully samples the
-    lowest band and decays as 2^{-0.5 k} on higher bands.
+    If local_sparsities is provided, allocation follows a Theorem 6.2-style
+    wavelet-regularity model (Adcock et al.) using smoothness alpha and
+    vanishing moments nu. Otherwise a neutral local sparsity profile is used.
 
     Args:
         n: Signal length (must be power-of-two).
         m: Total number of measurements.
-        wavelet: Wavelet name used for regularity parameters.
+        wavelet: Wavelet name used for regularity parameters (default: coif9).
         local_sparsities: Optional array of length r.
         seed: Optional random seed.
 
     Returns:
         Tuple (measure, adjoint, pseudo_inverse, metadata) where metadata
-        contains per-band allocations and band boundaries.
+        contains per-band allocations, normalized allocation weights, wavelet
+        regularity constants, and band boundaries.
     """
     if not _is_power_of_two(n):
         raise ValueError("Hadamard multilevel operator requires n power-of-two")
@@ -435,12 +469,14 @@ def create_hadamard_multilevel_operator(
     hadamard_seq = _sequency_ordered_hadamard(n) / np.sqrt(n)
 
     r = int(np.log2(n))
-    band_boundaries: list[tuple[int, int]] = [
-        (2 ** (level - 1), 2**level) for level in range(1, r + 1)
-    ]
+    band_boundaries: list[tuple[int, int]] = [(0, 2)]
+    for level in range(2, r + 1):
+        band_boundaries.append((2 ** (level - 1), 2**level))
     band_sizes = np.array([end - start for start, end in band_boundaries], dtype=int)
 
-    allocations = _allocate_multilevel_samples(band_sizes, m, wavelet, local_sparsities)
+    allocations, allocation_weights, alpha, nu = _allocate_multilevel_samples(
+        band_sizes, m, wavelet, local_sparsities
+    )
 
     selected_indices: list[np.ndarray] = []
     for (start, end), band_m in zip(band_boundaries, allocations):
@@ -453,9 +489,6 @@ def create_hadamard_multilevel_operator(
         indices = np.sort(np.concatenate(selected_indices))
     else:
         indices = np.array([], dtype=int)
-
-    if len(indices) != m:
-        raise ValueError("Internal allocation error: sampled row count does not equal m")
 
     scale = np.sqrt(n / m)
 
@@ -477,6 +510,9 @@ def create_hadamard_multilevel_operator(
         "wavelet": wavelet,
         "band_boundaries": band_boundaries,
         "allocation": allocations,
+        "allocation_weights": allocation_weights,
+        "alpha": alpha,
+        "nu": nu,
         "indices": indices,
     }
     return measure, adjoint, pseudo_inverse, metadata

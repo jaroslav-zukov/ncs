@@ -228,6 +228,32 @@ def test_hadamard_operator_shape_and_adjoint():
     assert_allclose(left, right, rtol=1e-10)
 
 
+def test_hadamard_operator_reproducible_for_fixed_seed():
+    n, m = 32, 12
+    measure_a, adjoint_a, _ = create_hadamard_operator(n, m, seed=101)
+    measure_b, adjoint_b, _ = create_hadamard_operator(n, m, seed=101)
+
+    x = np.random.default_rng(9).standard_normal(n)
+    y = np.random.default_rng(10).standard_normal(m)
+
+    assert_allclose(measure_a(x), measure_b(x))
+    assert_allclose(adjoint_a(y), adjoint_b(y))
+
+
+def test_hadamard_operator_adjoint_identity_across_sampling_ratios():
+    n = 32
+    rng = np.random.default_rng(21)
+    x = rng.standard_normal(n)
+
+    for m in [8, 16, 24]:
+        measure_op, adjoint_op, _ = create_hadamard_operator(n, m, seed=7 + m)
+        y = rng.standard_normal(m)
+
+        left = np.dot(measure_op(x), y)
+        right = np.dot(x, adjoint_op(y))
+        assert_allclose(left, right, rtol=1e-10)
+
+
 def test_hadamard_operator_sequency_dc_first():
     n = 8
     measure_op, _, _ = create_hadamard_operator(n, n, seed=5)
@@ -242,7 +268,7 @@ def test_hadamard_multilevel_operator_metadata_and_shape():
     measure_op, adjoint_op, pseudo_inverse_op, metadata = create_hadamard_multilevel_operator(
         n=n,
         m=m,
-        wavelet="haar",
+        wavelet="coif9",
         seed=11,
     )
 
@@ -253,6 +279,20 @@ def test_hadamard_multilevel_operator_metadata_and_shape():
     assert len(metadata["allocation"]) == int(np.log2(n))
     assert int(np.sum(metadata["allocation"])) == m
     assert len(metadata["band_boundaries"]) == int(np.log2(n))
+    assert metadata["band_boundaries"][0][0] == 0
+    assert metadata["band_boundaries"][-1][1] == n
+    assert metadata["alpha"] == pytest.approx(3.2)
+    assert metadata["nu"] == pytest.approx(18.0)
+    assert np.sum(metadata["allocation_weights"]) == pytest.approx(1.0)
+
+    band_sizes = np.array([end - start for start, end in metadata["band_boundaries"]])
+    assert np.all(metadata["allocation"] >= 0)
+    assert np.all(metadata["allocation"] <= band_sizes)
+
+
+def test_hadamard_multilevel_default_wavelet_is_coif9():
+    _, _, _, metadata = create_hadamard_multilevel_operator(n=64, m=20, seed=3)
+    assert metadata["wavelet"] == "coif9"
 
 
 def test_measurement_dispatcher_supports_hadamard_modes():
@@ -267,17 +307,30 @@ def test_measurement_dispatcher_supports_hadamard_modes():
 
 def test_hadamard_multilevel_coif9_tracks_local_sparsity_profile():
     n, m = 64, 24
-    local_sparsities = np.array([1, 2, 3, 4, 5, 6], dtype=float)
+    low_freq_profile = np.array([6, 5, 4, 3, 2, 1], dtype=float)
+    high_freq_profile = np.array([1, 2, 3, 4, 5, 6], dtype=float)
 
-    _, _, _, metadata = create_hadamard_multilevel_operator(
+    _, _, _, low_freq_metadata = create_hadamard_multilevel_operator(
         n=n,
         m=m,
         wavelet="coif9",
-        local_sparsities=local_sparsities,
+        local_sparsities=low_freq_profile,
+        seed=19,
+    )
+    _, _, _, high_freq_metadata = create_hadamard_multilevel_operator(
+        n=n,
+        m=m,
+        wavelet="coif9",
+        local_sparsities=high_freq_profile,
         seed=19,
     )
 
-    allocation = metadata["allocation"]
-    assert int(np.sum(allocation)) == m
-    assert allocation[-1] >= allocation[0]
-    assert allocation[-2] >= allocation[1]
+    low_freq_allocation = low_freq_metadata["allocation"]
+    high_freq_allocation = high_freq_metadata["allocation"]
+    assert int(np.sum(low_freq_allocation)) == m
+    assert int(np.sum(high_freq_allocation)) == m
+
+    levels = np.arange(1, len(low_freq_allocation) + 1)
+    low_center_of_mass = float(np.dot(low_freq_allocation, levels) / np.sum(low_freq_allocation))
+    high_center_of_mass = float(np.dot(high_freq_allocation, levels) / np.sum(high_freq_allocation))
+    assert high_center_of_mass > low_center_of_mass
