@@ -40,6 +40,8 @@ translate between the time-domain measurement and the wavelet-domain
 reconstruction.
 """
 
+from collections.abc import Callable
+
 import numpy as np
 
 from ncs.measurement_module import create_measurement_operator
@@ -55,6 +57,10 @@ def measure_and_reconstruct(
     coeffs_x: WtCoeffs,
     target_tree_sparsity: int,
     seed: int | None = None,
+    measurement_op_factory: Callable[
+        [int, int, int | None], tuple[Callable, Callable, Callable]
+    ]
+    | None = None,
 ) -> WtCoeffs:
     """
     Full CS pipeline: measure wavelet coefficients then reconstruct.
@@ -89,6 +95,9 @@ def measure_and_reconstruct(
         target_tree_sparsity: Tree-sparsity level k passed to the CoSaMP
             reconstruction algorithm.
         seed: Optional random seed for the measurement operator factory.
+        measurement_op_factory: Optional factory override with signature
+            (n, m, seed) -> (measure, adjoint, pseudo_inverse). If provided,
+            this is used instead of create_measurement_operator for this call.
 
     Returns:
         WtCoeffs: Reconstructed wavelet coefficient estimate x̂.
@@ -98,14 +107,16 @@ def measure_and_reconstruct(
     """
     n = coeffs_x.n
 
-    operator_bundle = create_measurement_operator(
-        measurement_mode, n, m, seed
+    operator_bundle = (
+        measurement_op_factory(n, m, seed)
+        if measurement_op_factory is not None
+        else create_measurement_operator(measurement_mode, n, m, seed)
     )
     if len(operator_bundle) == 3:
         measurement_op, adjoint_op, pseudo_inverse = operator_bundle
     else:
         measurement_op, adjoint_op = operator_bundle
-        pseudo_inverse = None
+        pseudo_inverse = adjoint_op
 
     if measurement_mode == 'gaussian':
         coeff_vector = getattr(coeffs_x, "flat_coeffs", None)

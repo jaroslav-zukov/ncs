@@ -7,7 +7,7 @@ from ncs.wt_coeffs import WtCoeffs
 def test_measure_and_reconstruct(mocker):
     measurement_mode = "gaussian"
     m = 50
-    reconstruction_mode = "tree_sparse"
+    reconstruction_mode = "CoSaMP"
     target_tree_sparsity = 10
     n = 1000
 
@@ -26,7 +26,7 @@ def test_measure_and_reconstruct(mocker):
         "ncs.compressed_sensing_module.inverse_transform", return_value=np.random.randn(n)
     )
     mock_create_meas = mocker.patch(
-        "ncs.compressed_sensing_module.create_measurement_operators",
+        "ncs.compressed_sensing_module.create_measurement_operator",
         return_value=(mock_measurement_op, mock_adjoint_op, mock_pseudo_inverse_op),
     )
     mocker.patch("ncs.compressed_sensing_module.WtCoeffs.from_flat_coeffs")
