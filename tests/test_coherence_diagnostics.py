@@ -7,12 +7,14 @@ from ncs.coherence_diagnostics import (
     coherence_heatmap,
     compute_gram_matrix,
     empirical_rip_constant,
+    flip_test,
+    local_coherence_matrix,
     mutual_coherence,
+    optimal_multilevel_allocation,
     phase_transition_grid,
 )
-from ncs.compressed_sensing_module import measure_and_reconstruct
 from ncs.measurement_module import create_subsampling_operator
-from ncs.wavelet_module import forward_transform
+from ncs.wavelet_module import forward_transform, inverse_transform
 
 matplotlib.use("Agg")
 
@@ -73,6 +75,7 @@ def test_empirical_rip_constant_contract_tree_sparse():
         k=3,
         n_trials=20,
         tree_sparse=True,
+        seed=123,
     )
 
     expected_keys = {"delta_k", "mean_ratio", "std_ratio", "min_ratio", "max_ratio"}
@@ -93,6 +96,7 @@ def test_empirical_rip_constant_contract_uniform_sparse():
         k=3,
         n_trials=20,
         tree_sparse=False,
+        seed=123,
     )
 
     expected_keys = {"delta_k", "mean_ratio", "std_ratio", "min_ratio", "max_ratio"}
@@ -101,16 +105,13 @@ def test_empirical_rip_constant_contract_uniform_sparse():
 
 
 def test_phase_transition_grid_contract():
-    n = 8
-
-    def factory(signal_len: int, m: int, seed: int | None = None):
-        return create_subsampling_operator(signal_len, m, seed)
+    n = 16
 
     grid = phase_transition_grid(
-        measure_op_factory=factory,
+        measurement_mode="subsampling",
         n=n,
         wavelet="haar",
-        m_values=[4],
+        m_values=[8],
         k_values=[1, 2],
         n_trials=2,
     )
@@ -121,55 +122,53 @@ def test_phase_transition_grid_contract():
     assert np.all((grid["recovery_probability"] >= 0.0) & (grid["recovery_probability"] <= 1.0))
 
 
-def test_measure_and_reconstruct_backwards_compatibility_without_factory(mocker):
-    coeffs_x = forward_transform(np.zeros(8), "haar")
-    mock_create_operator = mocker.patch(
-        "ncs.compressed_sensing_module.create_measurement_operator",
-        return_value=create_subsampling_operator(8, 4, seed=7),
-    )
-    mock_reconstruct = mocker.patch(
-        "ncs.compressed_sensing_module.reconstruct",
-        side_effect=lambda **kwargs: kwargs["x_init"],
-    )
+def test_local_coherence_matrix_returns_metadata():
+    n = 16
+    G = np.random.default_rng(0).standard_normal((8, n))
 
-    result = measure_and_reconstruct(
-        measurement_mode="subsampling",
-        m=4,
-        reconstruction_mode="CoSaMP",
-        coeffs_x=coeffs_x,
-        target_tree_sparsity=2,
-        seed=11,
-    )
+    local_mu, metadata = local_coherence_matrix(G=G, n=n, wavelet="haar")
 
-    mock_create_operator.assert_called_once_with("subsampling", 8, 4, 11)
-    mock_reconstruct.assert_called_once()
-    assert result.n == coeffs_x.n
+    assert local_mu.shape[0] == local_mu.shape[1]
+    assert local_mu.shape[0] == len(metadata["band_boundaries"])
+    assert local_mu.shape[1] == len(metadata["scale_boundaries"])
+    assert np.all(np.isfinite(local_mu))
 
 
-def test_measure_and_reconstruct_uses_factory_override(mocker):
-    coeffs_x = forward_transform(np.zeros(8), "haar")
-    mock_create_operator = mocker.patch(
-        "ncs.compressed_sensing_module.create_measurement_operator"
-    )
-    mock_reconstruct = mocker.patch(
-        "ncs.compressed_sensing_module.reconstruct",
-        side_effect=lambda **kwargs: kwargs["x_init"],
+def test_optimal_multilevel_allocation_sums_to_total_budget():
+    n = 16
+    coeffs = forward_transform(np.zeros(n), "haar")
+    local_sparsities = np.arange(1, coeffs.max_level + 2, dtype=float)
+
+    allocation = optimal_multilevel_allocation(
+        local_sparsities=local_sparsities,
+        n=n,
+        wavelet="haar",
+        total_m=20,
     )
 
-    def factory(signal_len: int, m: int, seed: int | None = None):
-        return create_subsampling_operator(signal_len, m, seed)
+    assert allocation.shape == local_sparsities.shape
+    assert np.sum(allocation) == 20
+    assert np.all(allocation >= 0)
 
-    result = measure_and_reconstruct(
-        measurement_mode="subsampling",
-        m=4,
-        reconstruction_mode="CoSaMP",
-        coeffs_x=coeffs_x,
-        target_tree_sparsity=2,
-        seed=11,
-        measurement_op_factory=factory,
+
+def test_flip_test_returns_expected_keys():
+    n = 16
+
+    def identity(signal: np.ndarray) -> np.ndarray:
+        return signal
+
+    def identity_adj(signal: np.ndarray) -> np.ndarray:
+        return signal
+
+    result = flip_test(
+        measure_op=(identity, identity_adj),
+        n=n,
+        wavelet="haar",
+        k=2,
+        n_trials=2,
     )
 
-    mock_create_operator.assert_not_called()
-    mock_reconstruct.assert_called_once()
-    assert result.n == coeffs_x.n
-
+    assert set(result.keys()) == {"mse_structured", "mse_flipped", "ratio"}
+    assert np.isfinite(result["mse_structured"])
+    assert np.isfinite(result["mse_flipped"])
+    assert result["ratio"] >= 0 or np.isinf(result["ratio"])
