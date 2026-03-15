@@ -165,13 +165,14 @@ def measure_and_reconstruct(
             return forward_transform(inverse_op(y), coeffs_x.wavelet)
 
         compressive_sensing_operators = (phi, phi_transpose, phi_pseudoinverse)
-    elif measurement_mode == 'fourier_subsampling':
+    elif measurement_mode in ('fourier_subsampling', 'hadamard', 'hadamard_multilevel'):
         y = measurement_op(inverse_transform(coeffs_x))
-        # For Fourier subsampling, the raw operators act in the frequency domain.
+        # For Fourier/Hadamard subsampling, the raw operators act in transform domain.
         # CoSaMP works in wavelet coefficient domain, so we compose the operators:
-        #   phi(wt_coeffs)   = S · DFT · IDWT(wt_coeffs)
-        #   phi_T(y)         = DWT · DFT^T · S^T(y)   (real adjoint of subsampled rfft)
-        #   phi_pinv(y)      = same as phi_T (DFT is unitary with ortho norm)
+        #   phi(wt_coeffs)   = S · T · IDWT(wt_coeffs)
+        #   phi_T(y)         = DWT · T^T · S^T(y)
+        #   phi_pinv(y)      = DWT · T^{-1} · S^T(y)
+        # where T is DFT or Walsh-Hadamard transform.
         # This composition is incoherent with the wavelet basis, providing RIP
         # guarantees for wavelet-sparse signals (Candès et al., 2006).
         def phi(wt_coeffs: WtCoeffs) -> np.ndarray:

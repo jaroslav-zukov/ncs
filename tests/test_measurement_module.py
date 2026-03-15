@@ -3,6 +3,8 @@ import pytest
 from numpy.testing import assert_allclose, assert_array_equal
 
 from ncs.measurement_module import (
+    create_hadamard_multilevel_operator,
+    create_hadamard_operator,
     create_fourier_subsampling_operator,
     create_gaussian_operator,
     create_measurement_operators,
@@ -208,3 +210,56 @@ def test_create_measurement_operators_fourier_subsampling():
 
     x_adj = adjoint_op(y)
     assert x_adj.shape == (n,)
+
+
+def test_hadamard_operator_shape_and_adjoint():
+    n, m = 32, 10
+    measure_op, adjoint_op, pseudo_inverse_op = create_hadamard_operator(n, m, seed=7)
+
+    x = np.random.default_rng(3).standard_normal(n)
+    y = np.random.default_rng(4).standard_normal(m)
+
+    assert measure_op(x).shape == (m,)
+    assert adjoint_op(y).shape == (n,)
+    assert pseudo_inverse_op(y).shape == (n,)
+
+    left = np.dot(measure_op(x), y)
+    right = np.dot(x, adjoint_op(y))
+    assert_allclose(left, right, rtol=1e-10)
+
+
+def test_hadamard_operator_sequency_dc_first():
+    n = 8
+    measure_op, _, _ = create_hadamard_operator(n, n, seed=5)
+
+    coeffs = measure_op(np.ones(n))
+    assert coeffs[0] == pytest.approx(np.sqrt(n), rel=1e-10, abs=1e-10)
+    assert_allclose(coeffs[1:], np.zeros(n - 1), atol=1e-10)
+
+
+def test_hadamard_multilevel_operator_metadata_and_shape():
+    n, m = 64, 20
+    measure_op, adjoint_op, pseudo_inverse_op, metadata = create_hadamard_multilevel_operator(
+        n=n,
+        m=m,
+        wavelet="haar",
+        seed=11,
+    )
+
+    assert measure_op(np.ones(n)).shape == (m,)
+    assert adjoint_op(np.ones(m)).shape == (n,)
+    assert pseudo_inverse_op(np.ones(m)).shape == (n,)
+
+    assert len(metadata["allocation"]) == int(np.log2(n))
+    assert int(np.sum(metadata["allocation"])) == m
+    assert len(metadata["band_boundaries"]) == int(np.log2(n))
+
+
+def test_measurement_dispatcher_supports_hadamard_modes():
+    n, m = 64, 20
+
+    hadamard_ops = create_measurement_operators("hadamard", n=n, m=m, seed=17)
+    multilevel_ops = create_measurement_operators("hadamard_multilevel", n=n, m=m, seed=17)
+
+    assert len(hadamard_ops) == 3
+    assert len(multilevel_ops) == 3

@@ -49,6 +49,109 @@ Each factory returns a triple (measure, adjoint, pseudo_inverse):
 from typing import Callable
 
 import numpy as np
+import pywt
+
+
+def _is_power_of_two(value: int) -> bool:
+    return value > 0 and (value & (value - 1)) == 0
+
+
+def _sylvester_hadamard(n: int) -> np.ndarray:
+    matrix = np.array([[1.0]])
+    while matrix.shape[0] < n:
+        matrix = np.block([[matrix, matrix], [matrix, -matrix]])
+    return matrix
+
+
+def _sequency_ordered_hadamard(n: int) -> np.ndarray:
+    if not _is_power_of_two(n):
+        raise ValueError("Hadamard operators require n to be a power of 2")
+
+    try:
+        from scipy.linalg import hadamard  # type: ignore
+
+        hadamard_matrix = hadamard(n, dtype=float)
+    except Exception:
+        hadamard_matrix = _sylvester_hadamard(n)
+
+    sign_change_counts = np.sum(
+        hadamard_matrix[:, 1:] != hadamard_matrix[:, :-1], axis=1
+    )
+    sequency_order = np.argsort(sign_change_counts, kind="stable")
+    return hadamard_matrix[sequency_order]
+
+
+def _allocate_multilevel_samples(
+    band_sizes: np.ndarray,
+    m: int,
+    wavelet: str,
+    local_sparsities: np.ndarray | None,
+) -> np.ndarray:
+    r = len(band_sizes)
+    if m < 1:
+        raise ValueError("m must be positive")
+    if m > int(np.sum(band_sizes)):
+        raise ValueError("m exceeds available sequency coefficients in dyadic bands")
+
+    if local_sparsities is not None:
+        sparsities = np.asarray(local_sparsities, dtype=float)
+        if sparsities.shape != (r,):
+            raise ValueError(f"local_sparsities must have length {r}")
+        if np.any(sparsities < 0):
+            raise ValueError("local_sparsities must be non-negative")
+
+        wavelet_obj = pywt.Wavelet(wavelet)
+        alpha = max((wavelet_obj.dec_len - 1) / 2.0, 1.0)
+        nu = float(wavelet_obj.vanishing_moments_psi or 1.0)
+        beta = min(alpha, nu)
+
+        levels = np.arange(1, r + 1, dtype=float)
+        weights = np.sqrt(sparsities + 1e-12) * (2.0 ** (-beta * (levels - 1.0)))
+    else:
+        weights = np.zeros(r, dtype=float)
+        weights[0] = 1.0
+        if r > 1:
+            levels = np.arange(2, r + 1, dtype=float)
+            weights[1:] = 2.0 ** (-0.5 * levels)
+
+    if np.all(weights == 0):
+        weights = np.ones(r, dtype=float)
+
+    raw = m * weights / np.sum(weights)
+    allocation = np.floor(raw).astype(int)
+    allocation = np.minimum(allocation, band_sizes)
+
+    if local_sparsities is None:
+        baseline = min(int(band_sizes[0]), m)
+        allocation[0] = max(allocation[0], baseline)
+        allocation[1:] = np.minimum(allocation[1:], band_sizes[1:])
+
+    deficit = int(m - np.sum(allocation))
+    if deficit > 0:
+        fractional = raw - np.floor(raw)
+        candidates = np.argsort(-fractional)
+        for idx in candidates:
+            available = int(band_sizes[idx] - allocation[idx])
+            if available <= 0:
+                continue
+            take = min(available, deficit)
+            allocation[idx] += take
+            deficit -= take
+            if deficit == 0:
+                break
+
+    if deficit > 0:
+        for idx in np.argsort(weights)[::-1]:
+            available = int(band_sizes[idx] - allocation[idx])
+            if available <= 0:
+                continue
+            take = min(available, deficit)
+            allocation[idx] += take
+            deficit -= take
+            if deficit == 0:
+                break
+
+    return allocation
 
 
 def create_subsampling_operator(n: int, m: int, seed: int = None):
@@ -248,6 +351,139 @@ def create_fourier_subsampling_operator(n: int, m: int, seed: int = None):
     return measure, adjoint, pseudo_inverse
 
 
+def create_hadamard_operator(n: int, m: int, seed: int = None):
+    """
+    Create a uniform subsampled Walsh-Hadamard measurement operator.
+
+    The transform uses Walsh sequency ordering (rows sorted by sign changes),
+    not natural Hadamard ordering. This preserves the low/high-sequency
+    interpretation required for multilevel sampling strategies.
+
+    Args:
+        n: Signal length (must be a power of 2).
+        m: Number of Hadamard coefficients to sample uniformly at random.
+        seed: Optional random seed.
+
+    Returns:
+        Tuple of (measure, adjoint, pseudo_inverse).
+
+    Raises:
+        ValueError: If n is not power-of-two or m is out of range.
+    """
+    if not _is_power_of_two(n):
+        raise ValueError("Hadamard operator requires n to be a power of 2")
+    if m < 1 or m > n:
+        raise ValueError("m must satisfy 1 <= m <= n")
+
+    rng = np.random.default_rng(seed)
+    hadamard_seq = _sequency_ordered_hadamard(n) / np.sqrt(n)
+    indices = np.sort(rng.choice(n, size=m, replace=False))
+    scale = np.sqrt(n / m)
+
+    def measure(signal: np.ndarray) -> np.ndarray:
+        transformed = hadamard_seq @ signal
+        return transformed[indices] * scale
+
+    def adjoint(measurements: np.ndarray) -> np.ndarray:
+        coeffs = np.zeros(n)
+        coeffs[indices] = measurements * scale
+        return hadamard_seq.T @ coeffs
+
+    def pseudo_inverse(measurements: np.ndarray) -> np.ndarray:
+        coeffs = np.zeros(n)
+        coeffs[indices] = measurements / scale
+        return hadamard_seq.T @ coeffs
+
+    return measure, adjoint, pseudo_inverse
+
+
+def create_hadamard_multilevel_operator(
+    n: int,
+    m: int,
+    wavelet: str = "haar",
+    local_sparsities: np.ndarray | None = None,
+    seed: int = None,
+):
+    """
+    Create a multilevel subsampled Walsh-Hadamard measurement operator.
+
+    Sequency coefficients are partitioned into r = log2(n) dyadic bands:
+        band k: [2^(k-1), 2^k),  k=1,...,r.
+    Within each band, rows are sampled uniformly at random using per-band
+    allocations m_k.
+
+    If local_sparsities is provided, allocation follows a wavelet-regularity
+    weighted specialization of the multilevel sampling principle in Adcock
+    et al. Otherwise a default allocation is used that fully samples the
+    lowest band and decays as 2^{-0.5 k} on higher bands.
+
+    Args:
+        n: Signal length (must be power-of-two).
+        m: Total number of measurements.
+        wavelet: Wavelet name used for regularity parameters.
+        local_sparsities: Optional array of length r.
+        seed: Optional random seed.
+
+    Returns:
+        Tuple (measure, adjoint, pseudo_inverse, metadata) where metadata
+        contains per-band allocations and band boundaries.
+    """
+    if not _is_power_of_two(n):
+        raise ValueError("Hadamard multilevel operator requires n power-of-two")
+    if m < 1 or m >= n:
+        raise ValueError("m must satisfy 1 <= m < n")
+
+    rng = np.random.default_rng(seed)
+    hadamard_seq = _sequency_ordered_hadamard(n) / np.sqrt(n)
+
+    r = int(np.log2(n))
+    band_boundaries: list[tuple[int, int]] = [
+        (2 ** (level - 1), 2**level) for level in range(1, r + 1)
+    ]
+    band_sizes = np.array([end - start for start, end in band_boundaries], dtype=int)
+
+    allocations = _allocate_multilevel_samples(band_sizes, m, wavelet, local_sparsities)
+
+    selected_indices: list[np.ndarray] = []
+    for (start, end), band_m in zip(band_boundaries, allocations):
+        if band_m <= 0:
+            continue
+        selected = np.sort(rng.choice(np.arange(start, end), size=band_m, replace=False))
+        selected_indices.append(selected)
+
+    if selected_indices:
+        indices = np.sort(np.concatenate(selected_indices))
+    else:
+        indices = np.array([], dtype=int)
+
+    if len(indices) != m:
+        raise ValueError("Internal allocation error: sampled row count does not equal m")
+
+    scale = np.sqrt(n / m)
+
+    def measure(signal: np.ndarray) -> np.ndarray:
+        transformed = hadamard_seq @ signal
+        return transformed[indices] * scale
+
+    def adjoint(measurements: np.ndarray) -> np.ndarray:
+        coeffs = np.zeros(n)
+        coeffs[indices] = measurements * scale
+        return hadamard_seq.T @ coeffs
+
+    def pseudo_inverse(measurements: np.ndarray) -> np.ndarray:
+        coeffs = np.zeros(n)
+        coeffs[indices] = measurements / scale
+        return hadamard_seq.T @ coeffs
+
+    metadata = {
+        "wavelet": wavelet,
+        "band_boundaries": band_boundaries,
+        "allocation": allocations,
+        "indices": indices,
+    }
+    return measure, adjoint, pseudo_inverse, metadata
+
+
 # MeasurementFunction = Callable[[np.ndarray], np.ndarray]
 # MeasurementOperators = Callable[
 #     [int, int, int | None], tuple[MeasurementFunction, MeasurementFunction]
@@ -393,6 +629,10 @@ MEASUREMENT_OPERATORS = {
     "subsampling": create_subsampling_operator,
     "gaussian": create_gaussian_operator,
     "fourier_subsampling": create_fourier_subsampling_operator,
+    "hadamard": create_hadamard_operator,
+    "hadamard_multilevel": lambda n, m, seed=None: create_hadamard_multilevel_operator(
+        n, m, seed=seed
+    )[:3],
     "random_modulation": create_random_modulation_operator,
     "wavelet_packet": lambda n, m, seed=None: create_wavelet_packet_operator(n, m, seed=seed)[:3],
 }
